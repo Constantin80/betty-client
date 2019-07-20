@@ -9,6 +9,7 @@ version '0.1'
 description = "client"
 sourceCompatibility = 12
 targetCompatibility = 12
+
 allprojects {
     tasks.withType(JavaCompile) {
         options.encoding = 'UTF-8'
