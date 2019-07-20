@@ -3,7 +3,6 @@ plugins {
     id 'maven'
     id 'idea'
 }
-
 group 'info.fmro'
 version '0.1'
 description = "client"
