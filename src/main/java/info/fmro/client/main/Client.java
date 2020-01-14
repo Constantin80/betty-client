@@ -65,6 +65,7 @@ public final class Client {
             maintenanceThread.start();
             final Thread timeJumpDetectorThread = new Thread(new TimeJumpDetectorThread());
             timeJumpDetectorThread.start();
+            Statics.sslClientThread.start();
 
             while (!Statics.mustStop.get()) {
                 //noinspection NestedTryStatement
@@ -73,10 +74,15 @@ public final class Client {
                     // this is where the work is placed
                     Generic.threadSleep(100);
                 } catch (Throwable throwable) { // safety net inside the loop
-                    logger.error("STRANGE ERROR inside Betty loop", throwable);
+                    logger.error("STRANGE ERROR inside Client loop", throwable);
                 }
             } // end while
 
+            if (Statics.sslClientThread.isAlive()) {
+                Statics.sslClientThread.closeSocket();
+                logger.info("joining sslClientThread thread");
+                Statics.sslClientThread.join();
+            }
             if (timeJumpDetectorThread.isAlive()) {
                 logger.info("joining timeJumpDetectorThread");
                 timeJumpDetectorThread.join();
@@ -105,9 +111,9 @@ public final class Client {
             VarsIO.writeObjectsToFiles();
             Generic.alreadyPrintedMap.clear(); // also prints the important properties
         } catch (NumberFormatException | InterruptedException exception) {
-            logger.error("STRANGE ERROR inside Betty", exception);
+            logger.error("STRANGE ERROR inside Client", exception);
         } catch (Throwable throwable) { // attempts to catch fatal errors
-            logger.error("EVEN STRANGER ERROR inside Betty", throwable);
+            logger.error("EVEN STRANGER ERROR inside Client", throwable);
         } finally {
             logger.info("Program ends"); // after this point, streams are getting closed, so logging might no longer work
 
