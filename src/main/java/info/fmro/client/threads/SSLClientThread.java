@@ -30,6 +30,11 @@ public class SSLClientThread
         Generic.closeObjects(this.socket);
     }
 
+    private synchronized void runAfterReceive() {
+// todo add StreamObjectInterface logic here
+
+    }
+
     @SuppressWarnings("OverlyNestedMethod")
     @Override
     public void run() {
@@ -62,7 +67,8 @@ public class SSLClientThread
                             receivedObject = objectInputStream.readObject();
                             if (receivedObject instanceof StreamObjectInterface) {
                                 final StreamObjectInterface receivedCommand = (StreamObjectInterface) receivedObject;
-                                receivedCommand.runAfterReceive();
+
+                                runAfterReceive();
                             } else if (receivedObject == null) { // nothing to be done, will reach end of loop and exit loop
                             } else {
                                 logger.error("unknown type of object in interfaceConnection stream: {} {}", receivedObject.getClass(), Generic.objectToString(receivedObject));

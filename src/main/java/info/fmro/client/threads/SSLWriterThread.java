@@ -41,7 +41,8 @@ class SSLWriterThread
             logger.info("poison pill received by InterfaceConnectionWriterThread");
             this.finished.set(true);
         } else {
-            object.runBeforeSend();
+            // any runBeforeSend logic can be added here
+
             try {
                 this.objectOutputStream.writeObject(object); // not synchronized, so when sending initialImage I'll send a copy of the main cache object
                 this.objectOutputStream.flush();
