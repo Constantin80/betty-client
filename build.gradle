@@ -29,6 +29,7 @@ dependencies {
     implementation group: 'info.fmro', name: 'shared', version: '0.1'
     implementation group: 'org.slf4j', name: 'slf4j-api', version: '1.7.30'
     implementation group: 'org.slf4j', name: 'slf4j-ext', version: '1.7.30'
+    implementation group: 'com.google.guava', name: 'guava', version: '28.2-jre'
     implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
     implementation group: 'ch.qos.logback', name: 'logback-core', version: '1.2.3'
     implementation group: 'org.jetbrains', name: 'annotations', version: '18.0.0'
