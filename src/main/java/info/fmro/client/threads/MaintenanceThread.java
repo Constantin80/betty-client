@@ -38,7 +38,8 @@ public class MaintenanceThread
         if (timeTillNext <= 0) {
             Statics.timeStamps.lastPrintDebugStamp(Generic.MINUTE_LENGTH_MILLISECONDS << 1);
             logger.info("maxMemory: {} totalMemory: {} freeMemory: {}", Generic.addCommas(Runtime.getRuntime().maxMemory()), Generic.addCommas(Runtime.getRuntime().totalMemory()), Generic.addCommas(Runtime.getRuntime().freeMemory()));
-            logger.info("threadPool active/mostEver: {}/{}", Statics.threadPoolExecutor.getActiveCount(), Statics.threadPoolExecutor.getLargestPoolSize());
+            logger.info("threadPool active/mostEver: {}/{} scheduledPool active/mostEver: {}/{}", Statics.threadPoolExecutor.getActiveCount(), Statics.threadPoolExecutor.getLargestPoolSize(), Statics.scheduledThreadPoolExecutor.getActiveCount(),
+                        Statics.scheduledThreadPoolExecutor.getLargestPoolSize());
 
             timeForNext = Statics.timeStamps.getLastPrintDebug();
 
@@ -65,7 +66,7 @@ public class MaintenanceThread
     public void run() {
         while (!Statics.mustStop.get()) {
             try {
-                long timeToSleep = 5L * Generic.MINUTE_LENGTH_MILLISECONDS; // initialized with minimum sleep time
+                long timeToSleep = 5L * Generic.MINUTE_LENGTH_MILLISECONDS; // initialized with maximum sleep time
 
                 if (Statics.mustWriteObjects.get()) {
                     VarsIO.writeObjectsToFiles();

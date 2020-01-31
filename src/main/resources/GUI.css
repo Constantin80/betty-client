@@ -1,0 +1,53 @@
+.root{
+-fx-background-color: black;
+-fx-border-color: black;
+-fx-text-fill: yellow;
+}
+
+.h-box{
+-fx-background-color: black;
+-fx-border-color: green;
+-fx-border-width: 0;
+-fx-font-size: 14;
+-fx-text-fill: yellow;
+}
+
+.v-box{
+-fx-background-color: black;
+-fx-border-color: green;
+-fx-border-width: 0;
+-fx-font-size: 14;
+-fx-text-fill: yellow;
+}
+
+.tree-cell{
+-fx-background-color: black;
+-fx-border-color: green;
+-fx-border-width: 0;
+-fx-font-size: 14;
+-fx-text-fill: yellow;
+}
+
+.button{
+-fx-border-width: 0;
+-fx-background-color: green;
+-fx-border-color: red;
+-fx-font-size: 10;
+-fx-text-fill: yellow;
+}
+
+.label{
+-fx-background-color: black;
+-fx-border-color: green;
+-fx-border-width: 0;
+-fx-font-size: 14;
+-fx-text-fill: yellow;
+}
+
+#ImportantText{
+-fx-background-color: black;
+-fx-border-color: green;
+-fx-border-width: 0;
+-fx-font-size: 16;
+-fx-text-fill: white;
+}

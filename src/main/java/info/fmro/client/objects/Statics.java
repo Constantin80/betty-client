@@ -1,13 +1,11 @@
 package info.fmro.client.objects;
 
 import info.fmro.client.threads.SSLClientThread;
-import info.fmro.shared.logic.ExistingFunds;
-import info.fmro.shared.logic.RulesManager;
 import info.fmro.shared.stream.cache.market.MarketCache;
 import info.fmro.shared.stream.cache.order.OrderCache;
 import info.fmro.shared.stream.objects.MarketCatalogueInterface;
 import info.fmro.shared.stream.objects.OrdersThreadInterface;
-import info.fmro.shared.utility.SynchronizedMap;
+import info.fmro.shared.stream.objects.StreamSynchronizedMap;
 
 import java.io.OutputStream;
 import java.util.ArrayList;
@@ -15,6 +13,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -35,19 +34,21 @@ public final class Statics {
     @SuppressWarnings("PublicStaticCollectionField")
     public static final LinkedBlockingQueue<Runnable> linkedBlockingQueue = new LinkedBlockingQueue<>();
     public static final ThreadPoolExecutor threadPoolExecutor = new ThreadPoolExecutor(64, 64, EXECUTOR_KEEP_ALIVE, TimeUnit.MILLISECONDS, linkedBlockingQueue);
+    public static final ScheduledThreadPoolExecutor scheduledThreadPoolExecutor = new ScheduledThreadPoolExecutor(64);
     public static final SSLClientThread sslClientThread = new SSLClientThread();
     public static final MarketCache marketCache = new MarketCache();
     public static final OrderCache orderCache = new OrderCache();
-    public static final RulesManager rulesManager = new RulesManager();
-    public static final ExistingFunds existingFunds = new ExistingFunds();
+    public static final ClientRulesManager rulesManager = new ClientRulesManager();
+    public static final ObservedExistingFunds existingFunds = new ObservedExistingFunds();
     public static final OrdersThreadInterface pendingOrdersThread = null; // not used for now
-    public static final SynchronizedMap<String, MarketCatalogueInterface> marketCataloguesMap = null; // <marketId, MarketCatalogue> , not used for now
+    public static final StreamSynchronizedMap<String, MarketCatalogueInterface> marketCataloguesMap = new StreamSynchronizedMap<>(128); // <marketId, MarketCatalogue>
 
     private Statics() {
     }
 
     static {
         threadPoolExecutor.allowCoreThreadTimeOut(true);
+        scheduledThreadPoolExecutor.allowCoreThreadTimeOut(true);
     }
 
     private static final Map<String, String> privateObjectFileNamesMap = new LinkedHashMap<>(32);

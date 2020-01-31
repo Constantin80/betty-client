@@ -5,6 +5,8 @@ import info.fmro.client.threads.MaintenanceThread;
 import info.fmro.client.threads.TimeJumpDetectorThread;
 import info.fmro.shared.utility.CustomUncaughtExceptionHandler;
 import info.fmro.shared.utility.Generic;
+import javafx.application.Application;
+import javafx.application.Platform;
 import org.jetbrains.annotations.Contract;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,6 +69,9 @@ public final class Client {
             timeJumpDetectorThread.start();
             Statics.sslClientThread.start();
 
+            new Thread(() -> Application.launch(GUI.class)).start();
+//            Application.launch(GUI.class);
+
             while (!Statics.mustStop.get()) {
                 //noinspection NestedTryStatement
                 try {
@@ -93,12 +98,20 @@ public final class Client {
             }
 
             Statics.threadPoolExecutor.shutdown();
+            Statics.scheduledThreadPoolExecutor.shutdown();
 
             if (!Statics.threadPoolExecutor.awaitTermination(10L, TimeUnit.MINUTES)) {
                 logger.error("threadPoolExecutor hanged: {}", Statics.threadPoolExecutor.getActiveCount());
                 final List<Runnable> runnableList = Statics.threadPoolExecutor.shutdownNow();
                 if (!runnableList.isEmpty()) {
                     logger.error("threadPoolExecutor not commenced: {}", runnableList.size());
+                }
+            }
+            if (!Statics.scheduledThreadPoolExecutor.awaitTermination(10L, TimeUnit.MINUTES)) {
+                logger.error("scheduledThreadPoolExecutor hanged: {}", Statics.scheduledThreadPoolExecutor.getActiveCount());
+                final List<Runnable> runnableList = Statics.scheduledThreadPoolExecutor.shutdownNow();
+                if (!runnableList.isEmpty()) {
+                    logger.error("scheduledThreadPoolExecutor not commenced: {}", runnableList.size());
                 }
             }
 
@@ -109,6 +122,7 @@ public final class Client {
             }
 
             VarsIO.writeObjectsToFiles();
+            Platform.exit();
             Generic.alreadyPrintedMap.clear(); // also prints the important properties
         } catch (NumberFormatException | InterruptedException exception) {
             logger.error("STRANGE ERROR inside Client", exception);

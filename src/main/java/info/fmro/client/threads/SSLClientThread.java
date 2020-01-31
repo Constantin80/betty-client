@@ -3,6 +3,7 @@ package info.fmro.client.threads;
 import info.fmro.client.objects.Statics;
 import info.fmro.shared.enums.ExistingFundsModificationCommand;
 import info.fmro.shared.enums.RulesManagerModificationCommand;
+import info.fmro.shared.enums.SynchronizedMapModificationCommand;
 import info.fmro.shared.logic.ExistingFunds;
 import info.fmro.shared.logic.ManagedEvent;
 import info.fmro.shared.logic.ManagedMarket;
@@ -12,10 +13,12 @@ import info.fmro.shared.stream.cache.market.MarketCache;
 import info.fmro.shared.stream.cache.order.OrderCache;
 import info.fmro.shared.stream.definitions.MarketChangeMessage;
 import info.fmro.shared.stream.definitions.OrderChangeMessage;
+import info.fmro.shared.stream.objects.MarketCatalogueInterface;
 import info.fmro.shared.stream.objects.PoisonPill;
 import info.fmro.shared.stream.objects.RunnerId;
 import info.fmro.shared.stream.objects.SerializableObjectModification;
 import info.fmro.shared.stream.objects.StreamObjectInterface;
+import info.fmro.shared.stream.objects.StreamSynchronizedMap;
 import info.fmro.shared.stream.protocol.ChangeMessageFactory;
 import info.fmro.shared.utility.Generic;
 import org.jetbrains.annotations.NotNull;
@@ -31,6 +34,9 @@ import java.io.ObjectInputStream;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.util.AbstractMap;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class SSLClientThread
@@ -58,6 +64,9 @@ public class SSLClientThread
         } else if (receivedCommand instanceof OrderCache) {
             @NotNull final OrderCache orderCache = (OrderCache) receivedCommand;
             Statics.orderCache.copyFromStream(orderCache);
+        } else if (receivedCommand instanceof StreamSynchronizedMap<?, ?>) {
+            @SuppressWarnings("unchecked") @NotNull final StreamSynchronizedMap<String, MarketCatalogueInterface> streamSynchronizedMap = (StreamSynchronizedMap<String, MarketCatalogueInterface>) receivedCommand;
+            Statics.marketCataloguesMap.copyFromStream(streamSynchronizedMap);
         } else if (receivedCommand instanceof MarketChangeMessage) {
             @NotNull final MarketChangeMessage marketChangeMessage = (MarketChangeMessage) receivedCommand;
             Statics.marketCache.onMarketChange(ChangeMessageFactory.ToChangeMessage(-1, marketChangeMessage), Statics.existingFunds.currencyRate);
@@ -287,6 +296,192 @@ public class SSLClientThread
                     default:
                         logger.error("unknown existingFundsModificationCommand in betty runAfterReceive: {} {}", existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
                 } // end switch
+            } else if (command instanceof SynchronizedMapModificationCommand) {
+                final SynchronizedMapModificationCommand synchronizedMapModificationCommand = (SynchronizedMapModificationCommand) command;
+                final Object[] objectsToModify = serializableObjectModification.getArray();
+                switch (synchronizedMapModificationCommand) {
+                    case clear:
+                        if (objectsToModify == null) {
+                            Statics.marketCataloguesMap.clear();
+                        } else {
+                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        }
+                        break;
+                    case put:
+                        if (objectsToModify != null && objectsToModify.length >= 2) {
+                            if (objectsToModify[0] instanceof String && objectsToModify[1] instanceof MarketCatalogueInterface) {
+                                final String key = (String) objectsToModify[0];
+                                final MarketCatalogueInterface value = (MarketCatalogueInterface) objectsToModify[1];
+                                if (objectsToModify.length == 2) {
+                                    Statics.marketCataloguesMap.put(key, value);
+                                } else if (objectsToModify.length == 3 && objectsToModify[2] instanceof Boolean) {
+                                    final boolean b = (boolean) objectsToModify[2];
+                                    Statics.marketCataloguesMap.put(key, value, b);
+                                } else {
+                                    logger.error("wrong inner size or class objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                }
+                            } else {
+                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            }
+                        } else {
+                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        }
+                        break;
+                    case putIfAbsent:
+                        if (objectsToModify != null && objectsToModify.length == 2) {
+                            if (objectsToModify[0] instanceof String && objectsToModify[1] instanceof MarketCatalogueInterface) {
+                                final String key = (String) objectsToModify[0];
+                                final MarketCatalogueInterface value = (MarketCatalogueInterface) objectsToModify[1];
+                                Statics.marketCataloguesMap.putIfAbsent(key, value);
+                            } else {
+                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            }
+                        } else {
+                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        }
+                        break;
+                    case putAll:
+                        if (objectsToModify != null && objectsToModify.length == 1) {
+                            if (objectsToModify[0] instanceof HashMap) {
+                                @SuppressWarnings("unchecked") final HashMap<String, MarketCatalogueInterface> m = (HashMap<String, MarketCatalogueInterface>) objectsToModify[0];
+                                Statics.marketCataloguesMap.putAll(m);
+                            } else {
+                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            }
+                        } else {
+                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        }
+                        break;
+                    case remove:
+                        if (objectsToModify != null && objectsToModify.length >= 1) {
+                            if (objectsToModify[0] instanceof String) {
+                                final String key = (String) objectsToModify[0];
+                                if (objectsToModify.length == 1) {
+                                    Statics.marketCataloguesMap.remove(key);
+                                } else if (objectsToModify.length == 2 && objectsToModify[1] instanceof MarketCatalogueInterface) {
+                                    final MarketCatalogueInterface value = (MarketCatalogueInterface) objectsToModify[1];
+                                    Statics.marketCataloguesMap.remove(key, value);
+                                } else {
+                                    logger.error("wrong inner size or class objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                }
+                            } else {
+                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            }
+                        } else {
+                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        }
+                        break;
+                    case removeEntry:
+                        if (objectsToModify != null && objectsToModify.length == 1) {
+                            if (objectsToModify[0] instanceof AbstractMap.SimpleEntry) {
+                                @SuppressWarnings("unchecked") final AbstractMap.SimpleEntry<String, MarketCatalogueInterface> entry = (AbstractMap.SimpleEntry<String, MarketCatalogueInterface>) objectsToModify[0];
+                                Statics.marketCataloguesMap.removeEntry(entry);
+                            } else {
+                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            }
+                        } else {
+                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        }
+                        break;
+                    case removeAllEntries:
+                        if (objectsToModify != null && objectsToModify.length == 1) {
+                            if (objectsToModify[0] instanceof HashSet) {
+                                final HashSet<?> set = (HashSet<?>) objectsToModify[0];
+                                Statics.marketCataloguesMap.removeAllEntries(set);
+                            } else {
+                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            }
+                        } else {
+                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        }
+                        break;
+                    case retainAllEntries:
+                        if (objectsToModify != null && objectsToModify.length == 1) {
+                            if (objectsToModify[0] instanceof HashSet) {
+                                final HashSet<?> set = (HashSet<?>) objectsToModify[0];
+                                Statics.marketCataloguesMap.retainAllEntries(set);
+                            } else {
+                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            }
+                        } else {
+                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        }
+                        break;
+                    case removeAllKeys:
+                        if (objectsToModify != null && objectsToModify.length == 1) {
+                            if (objectsToModify[0] instanceof HashSet) {
+                                final HashSet<?> set = (HashSet<?>) objectsToModify[0];
+                                Statics.marketCataloguesMap.removeAllKeys(set);
+                            } else {
+                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            }
+                        } else {
+                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        }
+                        break;
+                    case retainAllKeys:
+                        if (objectsToModify != null && objectsToModify.length == 1) {
+                            if (objectsToModify[0] instanceof HashSet) {
+                                final HashSet<?> set = (HashSet<?>) objectsToModify[0];
+                                Statics.marketCataloguesMap.retainAllKeys(set);
+                            } else {
+                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            }
+                        } else {
+                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        }
+                        break;
+                    case removeValue:
+                        if (objectsToModify != null && objectsToModify.length == 1) {
+                            if (objectsToModify[0] instanceof MarketCatalogueInterface) {
+                                final MarketCatalogueInterface value = (MarketCatalogueInterface) objectsToModify[0];
+                                Statics.marketCataloguesMap.removeValue(value);
+                            } else {
+                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            }
+                        } else {
+                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        }
+                        break;
+                    case removeValueAll:
+                        if (objectsToModify != null && objectsToModify.length == 1) {
+                            if (objectsToModify[0] instanceof MarketCatalogueInterface) {
+                                final MarketCatalogueInterface value = (MarketCatalogueInterface) objectsToModify[0];
+                                Statics.marketCataloguesMap.removeValueAll(value);
+                            } else {
+                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            }
+                        } else {
+                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        }
+                        break;
+                    case removeAllValues:
+                        if (objectsToModify != null && objectsToModify.length == 1) {
+                            if (objectsToModify[0] instanceof HashSet) {
+                                final HashSet<?> set = (HashSet<?>) objectsToModify[0];
+                                Statics.marketCataloguesMap.removeAllValues(set);
+                            } else {
+                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            }
+                        } else {
+                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        }
+                        break;
+                    case retainAllValues:
+                        if (objectsToModify != null && objectsToModify.length == 1) {
+                            if (objectsToModify[0] instanceof HashSet) {
+                                final HashSet<?> set = (HashSet<?>) objectsToModify[0];
+                                Statics.marketCataloguesMap.retainAllValues(set);
+                            } else {
+                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            }
+                        } else {
+                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        }
+                        break;
+                    default:
+                        logger.error("unknown synchronizedMapModificationCommand in betty runAfterReceive: {} {}", synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                } // end switch
             } else {
                 logger.error("unknown command object in betty runAfterReceive: {} {} {} {}", command == null ? null : command.getClass(), command, receivedCommand.getClass(), Generic.objectToString(receivedCommand));
             }
@@ -309,14 +504,16 @@ public class SSLClientThread
 
         final SSLSocketFactory socketFactory = sSLContext != null ? sSLContext.getSocketFactory() : null;
         if (socketFactory != null) {
+            int nErrors = 0;
             do {
                 SSLWriterThread writerThread = null;
                 ObjectInputStream objectInputStream = null;
                 try {
                     this.socket = (SSLSocket) socketFactory.createSocket(Statics.SERVER_ADDRESS, Statics.SERVER_PORT);
-                    // todo ssl auth check test
+                    // todo ssl auth check test, should pass with the right client certificate and fail without; this will be done by running the program
 
                     if (this.socket != null) {
+                        nErrors = 0;
                         writerThread = new SSLWriterThread(this.socket, this.sendQueue);
                         writerThread.start();
                         //noinspection resource,IOResourceOpenedButNotSafelyClosed
@@ -352,7 +549,18 @@ public class SSLClientThread
 
                 if (Statics.mustStop.get()) { // no need for anti throttle, nothing to be done
                 } else {
-                    Generic.threadSleep(1_000L);
+                    nErrors++;
+
+                    if (nErrors < 3) {
+                        Generic.threadSleepSegmented(1_000L, 100, Statics.mustStop);
+                    } else if (nErrors < 10) {
+                        Generic.threadSleepSegmented(5_000L, 100, Statics.mustStop);
+                    } else if (nErrors < 50) {
+                        Generic.threadSleepSegmented(20_000L, 100, Statics.mustStop);
+                    } else {
+                        logger.error("huge number of errors in SSLClientThread: {}", nErrors);
+                        Generic.threadSleepSegmented(Generic.MINUTE_LENGTH_MILLISECONDS, 100, Statics.mustStop);
+                    }
                 }
 
                 if (writerThread != null && writerThread.isAlive()) {
