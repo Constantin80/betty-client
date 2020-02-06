@@ -24,7 +24,8 @@ public final class Statics {
     public static final int SERVER_PORT = 4375;
     public static final long EXECUTOR_KEEP_ALIVE = 10_000L, DELAY_PRINT_AVERAGES = 20_000L, PROGRAM_START_TIME = System.currentTimeMillis();
     public static final String KEY_STORE_TYPE = "pkcs12", PROJECT_PREFIX = "info.fmro", SERVER_ADDRESS = "fmro.info";
-    public static final String STDOUT_FILE_NAME = "out.txt", STDERR_FILE_NAME = "err.txt", KEY_STORE_FILE_NAME = "input/client.p12", KEY_STORE_PASSWORD = "", LOGS_FOLDER_NAME = "logs", DATA_FOLDER_NAME = "data";
+    public static final String KEY_STORE_FILE_NAME = "input/client.p12", KEY_STORE_PASSWORD = "test12";
+    public static final String STDOUT_FILE_NAME = "out.txt", STDERR_FILE_NAME = "err.txt", LOGS_FOLDER_NAME = "logs", DATA_FOLDER_NAME = "data";
     public static final boolean closeStandardStreamsNotInitialized = false; // modified by reflection for tests; can't initialize, as that inlines the value and it can no longer be modified; no longer modified in tests, now I initialize it
     @SuppressWarnings({"StaticVariableMayNotBeInitialized", "PublicStaticCollectionField", "StaticNonFinalField"})
     public static ArrayList<? extends OutputStream> standardStreamsList;

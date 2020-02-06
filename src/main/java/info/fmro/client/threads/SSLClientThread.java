@@ -57,7 +57,7 @@ public class SSLClientThread
             Statics.rulesManager.copyFromStream(rulesManager);
         } else if (receivedCommand instanceof ExistingFunds) {
             @NotNull final ExistingFunds existingFunds = (ExistingFunds) receivedCommand;
-            Statics.existingFunds.copyFromStream(existingFunds);
+            Statics.existingFunds.copyFrom(existingFunds);
         } else if (receivedCommand instanceof MarketCache) {
             @NotNull final MarketCache marketCache = (MarketCache) receivedCommand;
             Statics.marketCache.copyFromStream(marketCache);
@@ -497,7 +497,7 @@ public class SSLClientThread
         SSLContext sSLContext = null;
         try {
             sSLContext = SSLContext.getInstance("TLS");
-            sSLContext.init(keyManagers, null, new SecureRandom());
+            sSLContext.init(keyManagers, Generic.getTrustAllCertsManager(), new SecureRandom());
         } catch (NoSuchAlgorithmException | KeyManagementException e) {
             logger.error("SSLContext exception in InterfaceServer", e);
         }
@@ -510,8 +510,6 @@ public class SSLClientThread
                 ObjectInputStream objectInputStream = null;
                 try {
                     this.socket = (SSLSocket) socketFactory.createSocket(Statics.SERVER_ADDRESS, Statics.SERVER_PORT);
-                    // todo ssl auth check test, should pass with the right client certificate and fail without; this will be done by running the program
-
                     if (this.socket != null) {
                         nErrors = 0;
                         writerThread = new SSLWriterThread(this.socket, this.sendQueue);
@@ -534,8 +532,18 @@ public class SSLClientThread
                     } else {
                         logger.error("STRANGE socket null in SSLClientThread thread, timeStamp={}", System.currentTimeMillis());
                     }
+//                } catch (EOFException e) {
+//                    if (Statics.mustStop.get()) {
+//                        logger.info("EOFException received in SSLClientThread while program stops");
+//                    } else {
+//                        logger.error("EOFException received in SSLClientThread: ", e);
+//                    }
                 } catch (@SuppressWarnings("OverlyBroadCatchBlock") IOException e) {
-                    logger.error("IOException in SSLClientThread, will retry", e);
+                    if (Statics.mustStop.get()) {
+                        logger.info("IOException received in SSLClientThread, as program stops");
+                    } else {
+                        logger.error("IOException in SSLClientThread, will retry", e);
+                    }
                 } catch (ClassNotFoundException e) {
                     logger.error("STRANGE ClassNotFoundException in SSLClientThread, will retry", e);
                 } finally {

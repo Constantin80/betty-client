@@ -22,11 +22,13 @@ public class ObservedExistingFunds
         this.listOfQueues = new ListOfQueues();
     }
 
+    @Override
     public synchronized void setAvailableFunds(final double newAvailableFunds) {
         super.setAvailableFunds(newAvailableFunds);
         GUI.updateAvailableLabel(this.getAvailableFunds());
     }
 
+    @Override
     public synchronized boolean setReserve(final double newReserve) {
         final boolean modified = super.setReserve(newReserve);
         if (modified) {
@@ -36,12 +38,14 @@ public class ObservedExistingFunds
         return modified;
     }
 
+    @Override
     public synchronized void setExposure(final double newExposure) {
         super.setExposure(newExposure);
         GUI.updateExposureLabel(this.getExposure());
     }
 
-    protected synchronized void setTotalFunds(final double newValue) {
+    @Override
+    public synchronized void setTotalFunds(final double newValue) {
         super.setTotalFunds(newValue);
         GUI.updateTotalFundsLabel(this.getTotalFunds());
     }

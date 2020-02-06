@@ -28,7 +28,7 @@ class SSLWriterThread
             //noinspection resource,IOResourceOpenedButNotSafelyClosed
             tempObjectOutputStream = new ObjectOutputStream(socket.getOutputStream());
         } catch (IOException e) {
-            logger.error("IOException in InterfaceConnectionWriterThread constructor");
+            logger.error("IOException in InterfaceConnectionWriterThread constructor", e);
             this.finished.set(true);
         }
         this.objectOutputStream = tempObjectOutputStream;

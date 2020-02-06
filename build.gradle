@@ -24,6 +24,9 @@ shadowJar {
     mainClassName = 'info.fmro.client.main.Client'
 }
 
+compileJava {
+    options.compilerArgs += ["-Xlint"]
+}
 allprojects {
     tasks.withType(JavaCompile) {
         options.encoding = 'UTF-8'
