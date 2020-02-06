@@ -17,7 +17,7 @@ public final class VarsIO {
     private VarsIO() {
     }
 
-    public static void readObjectsFromFiles() {
+    static void readObjectsFromFiles() {
         for (final Entry<String, String> entry : Statics.objectFileNamesMap.entrySet()) {
             final String key = entry.getKey();
             final Object objectFromFile = Generic.readObjectFromFile(entry.getValue());

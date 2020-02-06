@@ -17,7 +17,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Objects;
 
-@SuppressWarnings("UtilityClass")
+@SuppressWarnings({"UtilityClass", "unused"})
 final class GUIUtils {
     private static final Logger logger = LoggerFactory.getLogger(GUIUtils.class);
 

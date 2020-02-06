@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @SuppressWarnings("UtilityClass")
-public final class Client {
+final class Client {
     private static final Logger logger = LoggerFactory.getLogger(Client.class);
 
     @Contract(pure = true)
@@ -133,6 +133,7 @@ public final class Client {
 
             Generic.closeStandardStreams();
 
+            //noinspection ConstantConditions
             Generic.closeObjects(outPrintStream, outFileOutputStream, errPrintStream, errFileOutputStream);
         }
     }

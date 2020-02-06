@@ -35,22 +35,26 @@ import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.AbstractMap;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
 
+@SuppressWarnings({"OverlyComplexClass", "OverlyCoupledClass"})
 public class SSLClientThread
         extends Thread {
     private static final Logger logger = LoggerFactory.getLogger(SSLClientThread.class);
-    @SuppressWarnings("FieldAccessedSynchronizedAndUnsynchronized")
+    @SuppressWarnings("WeakerAccess")
     public final LinkedBlockingQueue<StreamObjectInterface> sendQueue = new LinkedBlockingQueue<>();
     private SSLSocket socket;
 
-    public synchronized void closeSocket() {
+    public void closeSocket() { // probably doesn't need synchronization
         logger.info("closing SSLClientThread socket");
         Generic.closeObjects(this.socket);
     }
 
+    @SuppressWarnings({"OverlyComplexMethod", "OverlyCoupledMethod", "OverlyLongMethod", "OverlyNestedMethod", "ChainOfInstanceofChecks", "SwitchStatementDensity"})
     private synchronized void runAfterReceive(@NotNull final StreamObjectInterface receivedCommand) {
         if (receivedCommand instanceof RulesManager) {
             @NotNull final RulesManager rulesManager = (RulesManager) receivedCommand;
@@ -343,7 +347,7 @@ public class SSLClientThread
                     case putAll:
                         if (objectsToModify != null && objectsToModify.length == 1) {
                             if (objectsToModify[0] instanceof HashMap) {
-                                @SuppressWarnings("unchecked") final HashMap<String, MarketCatalogueInterface> m = (HashMap<String, MarketCatalogueInterface>) objectsToModify[0];
+                                @SuppressWarnings("unchecked") final Map<String, MarketCatalogueInterface> m = (Map<String, MarketCatalogueInterface>) objectsToModify[0];
                                 Statics.marketCataloguesMap.putAll(m);
                             } else {
                                 logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
@@ -374,7 +378,7 @@ public class SSLClientThread
                     case removeEntry:
                         if (objectsToModify != null && objectsToModify.length == 1) {
                             if (objectsToModify[0] instanceof AbstractMap.SimpleEntry) {
-                                @SuppressWarnings("unchecked") final AbstractMap.SimpleEntry<String, MarketCatalogueInterface> entry = (AbstractMap.SimpleEntry<String, MarketCatalogueInterface>) objectsToModify[0];
+                                @SuppressWarnings("unchecked") final Map.Entry<String, MarketCatalogueInterface> entry = (Map.Entry<String, MarketCatalogueInterface>) objectsToModify[0];
                                 Statics.marketCataloguesMap.removeEntry(entry);
                             } else {
                                 logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
@@ -386,7 +390,7 @@ public class SSLClientThread
                     case removeAllEntries:
                         if (objectsToModify != null && objectsToModify.length == 1) {
                             if (objectsToModify[0] instanceof HashSet) {
-                                final HashSet<?> set = (HashSet<?>) objectsToModify[0];
+                                final Collection<?> set = (Collection<?>) objectsToModify[0];
                                 Statics.marketCataloguesMap.removeAllEntries(set);
                             } else {
                                 logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
@@ -398,7 +402,7 @@ public class SSLClientThread
                     case retainAllEntries:
                         if (objectsToModify != null && objectsToModify.length == 1) {
                             if (objectsToModify[0] instanceof HashSet) {
-                                final HashSet<?> set = (HashSet<?>) objectsToModify[0];
+                                final Collection<?> set = (Collection<?>) objectsToModify[0];
                                 Statics.marketCataloguesMap.retainAllEntries(set);
                             } else {
                                 logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
@@ -410,7 +414,7 @@ public class SSLClientThread
                     case removeAllKeys:
                         if (objectsToModify != null && objectsToModify.length == 1) {
                             if (objectsToModify[0] instanceof HashSet) {
-                                final HashSet<?> set = (HashSet<?>) objectsToModify[0];
+                                final Collection<?> set = (Collection<?>) objectsToModify[0];
                                 Statics.marketCataloguesMap.removeAllKeys(set);
                             } else {
                                 logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
@@ -422,7 +426,7 @@ public class SSLClientThread
                     case retainAllKeys:
                         if (objectsToModify != null && objectsToModify.length == 1) {
                             if (objectsToModify[0] instanceof HashSet) {
-                                final HashSet<?> set = (HashSet<?>) objectsToModify[0];
+                                final Collection<?> set = (Collection<?>) objectsToModify[0];
                                 Statics.marketCataloguesMap.retainAllKeys(set);
                             } else {
                                 logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
@@ -458,7 +462,7 @@ public class SSLClientThread
                     case removeAllValues:
                         if (objectsToModify != null && objectsToModify.length == 1) {
                             if (objectsToModify[0] instanceof HashSet) {
-                                final HashSet<?> set = (HashSet<?>) objectsToModify[0];
+                                final Collection<?> set = (Collection<?>) objectsToModify[0];
                                 Statics.marketCataloguesMap.removeAllValues(set);
                             } else {
                                 logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
@@ -470,7 +474,7 @@ public class SSLClientThread
                     case retainAllValues:
                         if (objectsToModify != null && objectsToModify.length == 1) {
                             if (objectsToModify[0] instanceof HashSet) {
-                                final HashSet<?> set = (HashSet<?>) objectsToModify[0];
+                                final Collection<?> set = (Collection<?>) objectsToModify[0];
                                 Statics.marketCataloguesMap.retainAllValues(set);
                             } else {
                                 logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));

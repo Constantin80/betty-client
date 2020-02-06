@@ -30,13 +30,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
+@SuppressWarnings("ClassWithTooManyMethods")
 public class GUI
         extends Application {
     private static final Logger logger = LoggerFactory.getLogger(GUI.class);
@@ -85,11 +85,12 @@ public class GUI
         Platform.runLater(() -> exposureLabel.setText("€ " + Generic.addCommas(funds, 2)));
     }
 
+    @SuppressWarnings("WeakerAccess")
     public static void checkTreeItemsWithNullName() {
         Platform.runLater(GUI::privateCheckTreeItemsWithNullName);
     }
 
-    public static void publicRemoveManagedEvent(final String eventId, final HashSet<String> marketIds) {
+    public static void publicRemoveManagedEvent(final String eventId, final Iterable<String> marketIds) {
         Platform.runLater(() -> removeManagedEvent(eventId, marketIds));
     }
 
@@ -105,14 +106,9 @@ public class GUI
         Platform.runLater(() -> removeManagedMarket(marketId, parentId));
     }
 
-    private static void removeManagedEvent(final String eventId, final HashSet<String> marketIds) {
+    private static void removeManagedEvent(final String eventId, final Iterable<String> marketIds) {
         final TreeItem<String> eventTreeItem = eventsTreeItemMap.get(eventId);
-        @Nullable final ObservableList<TreeItem<String>> listOfChildren;
-        if (eventTreeItem != null) {
-            listOfChildren = eventTreeItem.getChildren();
-        } else {
-            listOfChildren = null;
-        }
+        @Nullable final ObservableList<TreeItem<String>> listOfChildren = eventTreeItem != null ? eventTreeItem.getChildren() : null;
         if (marketIds != null) {
             for (final String marketId : marketIds) {
                 removeManagedMarket(marketId, listOfChildren);
@@ -130,26 +126,18 @@ public class GUI
         eventsTreeItemMap.remove(eventId);
     }
 
+    @SuppressWarnings("UnusedReturnValue")
     private static boolean removeManagedMarket(final String marketId, final String parentEventId) {
         final TreeItem<String> eventTreeItem = eventsTreeItemMap.get(parentEventId);
-        @Nullable final ObservableList<TreeItem<String>> listOfChildren;
-        if (eventTreeItem != null) {
-            listOfChildren = eventTreeItem.getChildren();
-        } else {
-            listOfChildren = null;
-        }
+        @Nullable final ObservableList<TreeItem<String>> listOfChildren = eventTreeItem != null ? eventTreeItem.getChildren() : null;
         return removeManagedMarket(marketId, listOfChildren);
     }
 
-    private static boolean removeManagedMarket(final String marketId, final ObservableList<TreeItem<String>> listOfChildren) {
-        boolean removed = false;
+    private static boolean removeManagedMarket(final String marketId, final Collection<TreeItem<String>> listOfChildren) {
         final TreeItem<String> marketTreeItem = marketsTreeItemMap.remove(marketId);
-        if (listOfChildren != null) {
-            removed = listOfChildren.remove(marketTreeItem);
+        boolean removed = listOfChildren != null && listOfChildren.remove(marketTreeItem);
+        if (removed) { // already removed, nothing to be done
         } else {
-            removed = false;
-        }
-        if (!removed) {
             final TreeItem<String> defaultEvent = eventsTreeItemMap.get(null);
             if (defaultEvent != null) {
                 @NotNull final ObservableList<TreeItem<String>> defaultChildren = defaultEvent.getChildren();
@@ -157,7 +145,6 @@ public class GUI
             } else {
                 removed = false;
             }
-        } else { // already removed, nothing to be done
         }
 
         return removed;
@@ -177,6 +164,7 @@ public class GUI
         marketsTreeItemMap.clear();
     }
 
+    @SuppressWarnings("UnusedReturnValue")
     private static int initializeTreeView() {
         int modified = 0;
 
@@ -251,7 +239,7 @@ public class GUI
         return modified;
     }
 
-    private static int addManagedMarket(@NotNull final Map.Entry<String, ManagedMarket> entry) {
+    private static int addManagedMarket(@NotNull final Map.Entry<String, ? extends ManagedMarket> entry) {
         final String marketId = entry.getKey();
         final ManagedMarket managedMarket = entry.getValue();
         return addManagedMarket(marketId, managedMarket);
@@ -298,7 +286,7 @@ public class GUI
         return defaultEvent;
     }
 
-    private static int addManagedEvent(@NotNull final Map.Entry<String, ManagedEvent> entry) {
+    private static int addManagedEvent(@NotNull final Map.Entry<String, ? extends ManagedEvent> entry) {
         final String eventId = entry.getKey();
         final ManagedEvent managedEvent = entry.getValue();
         return addManagedEvent(eventId, managedEvent);
@@ -342,7 +330,7 @@ public class GUI
             final int nMarkets = marketsMap.size();
             if (nMarkets > 0) {
                 @NotNull final ObservableList<TreeItem<String>> defaultChildrenList = defaultEvent.getChildren();
-                final List<TreeItem<String>> marketsToMove = new ArrayList<>(0);
+                final Collection<TreeItem<String>> marketsToMove = new ArrayList<>(0);
                 for (final TreeItem<String> marketTreeItem : defaultChildrenList) {
                     final String marketId = marketsTreeItemMap.getKey(marketTreeItem);
                     if (marketsMap.containsKey(marketId)) {
