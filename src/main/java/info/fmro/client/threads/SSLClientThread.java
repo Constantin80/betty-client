@@ -13,6 +13,7 @@ import info.fmro.shared.stream.cache.market.MarketCache;
 import info.fmro.shared.stream.cache.order.OrderCache;
 import info.fmro.shared.stream.definitions.MarketChangeMessage;
 import info.fmro.shared.stream.definitions.OrderChangeMessage;
+import info.fmro.shared.stream.objects.EventInterface;
 import info.fmro.shared.stream.objects.MarketCatalogueInterface;
 import info.fmro.shared.stream.objects.PoisonPill;
 import info.fmro.shared.stream.objects.RunnerId;
@@ -22,6 +23,7 @@ import info.fmro.shared.stream.objects.StreamSynchronizedMap;
 import info.fmro.shared.stream.protocol.ChangeMessageFactory;
 import info.fmro.shared.utility.Generic;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +33,7 @@ import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import java.io.IOException;
 import java.io.ObjectInputStream;
+import java.io.Serializable;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -45,7 +48,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class SSLClientThread
         extends Thread {
     private static final Logger logger = LoggerFactory.getLogger(SSLClientThread.class);
-    @SuppressWarnings("WeakerAccess")
     public final LinkedBlockingQueue<StreamObjectInterface> sendQueue = new LinkedBlockingQueue<>();
     private SSLSocket socket;
 
@@ -54,7 +56,7 @@ public class SSLClientThread
         Generic.closeObjects(this.socket);
     }
 
-    @SuppressWarnings({"OverlyComplexMethod", "OverlyCoupledMethod", "OverlyLongMethod", "OverlyNestedMethod", "ChainOfInstanceofChecks", "SwitchStatementDensity"})
+    @SuppressWarnings({"OverlyComplexMethod", "OverlyCoupledMethod", "OverlyLongMethod", "OverlyNestedMethod", "ChainOfInstanceofChecks", "SwitchStatementDensity", "unchecked"})
     private synchronized void runAfterReceive(@NotNull final StreamObjectInterface receivedCommand) {
         if (receivedCommand instanceof RulesManager) {
             @NotNull final RulesManager rulesManager = (RulesManager) receivedCommand;
@@ -69,8 +71,17 @@ public class SSLClientThread
             @NotNull final OrderCache orderCache = (OrderCache) receivedCommand;
             Statics.orderCache.copyFromStream(orderCache);
         } else if (receivedCommand instanceof StreamSynchronizedMap<?, ?>) {
-            @SuppressWarnings("unchecked") @NotNull final StreamSynchronizedMap<String, MarketCatalogueInterface> streamSynchronizedMap = (StreamSynchronizedMap<String, MarketCatalogueInterface>) receivedCommand;
-            Statics.marketCataloguesMap.copyFromStream(streamSynchronizedMap);
+            @NotNull final StreamSynchronizedMap<?, ?> streamSynchronizedMap = (StreamSynchronizedMap<?, ?>) receivedCommand;
+            final Class<?> clazz = streamSynchronizedMap.getClazz();
+            if (MarketCatalogueInterface.class.equals(clazz)) {
+                @SuppressWarnings("unchecked") @NotNull final StreamSynchronizedMap<String, MarketCatalogueInterface> streamMarketCatalogueMap = (StreamSynchronizedMap<String, MarketCatalogueInterface>) receivedCommand;
+                Statics.marketCataloguesMap.copyFromStream(streamMarketCatalogueMap);
+            } else if (EventInterface.class.equals(clazz)) {
+                @SuppressWarnings("unchecked") @NotNull final StreamSynchronizedMap<String, EventInterface> streamEventMap = (StreamSynchronizedMap<String, EventInterface>) receivedCommand;
+                Statics.eventsMap.copyFromStream(streamEventMap);
+            } else {
+                logger.error("unknown streamSynchronizedMap class in runAfterReceive for: {} {}", clazz, Generic.objectToString(receivedCommand));
+            }
         } else if (receivedCommand instanceof MarketChangeMessage) {
             @NotNull final MarketChangeMessage marketChangeMessage = (MarketChangeMessage) receivedCommand;
             Statics.marketCache.onMarketChange(ChangeMessageFactory.ToChangeMessage(-1, marketChangeMessage), Statics.existingFunds.currencyRate);
@@ -92,10 +103,10 @@ public class SSLClientThread
                                 final ManagedEvent managedEvent = (ManagedEvent) objectsToModify[1];
                                 Statics.rulesManager.addManagedEvent(eventId, managedEvent);
                             } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
                         } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                         }
                         break;
                     case removeManagedEvent:
@@ -104,10 +115,10 @@ public class SSLClientThread
                                 final String eventId = (String) objectsToModify[0];
                                 Statics.rulesManager.removeManagedEvent(eventId);
                             } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
                         } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                         }
                         break;
                     case addManagedMarket:
@@ -117,10 +128,10 @@ public class SSLClientThread
                                 final ManagedMarket managedMarket = (ManagedMarket) objectsToModify[1];
                                 Statics.rulesManager.addManagedMarket(marketId, managedMarket);
                             } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
                         } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                         }
                         break;
                     case removeManagedMarket:
@@ -129,10 +140,10 @@ public class SSLClientThread
                                 final String marketId = (String) objectsToModify[0];
                                 Statics.rulesManager.removeManagedMarket(marketId);
                             } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
                         } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                         }
                         break;
                     case setEventAmountLimit:
@@ -142,10 +153,10 @@ public class SSLClientThread
                                 final Double newAmount = (Double) objectsToModify[1];
                                 Statics.rulesManager.setEventAmountLimit(eventId, newAmount, Statics.pendingOrdersThread, Statics.orderCache, Statics.existingFunds, Statics.marketCataloguesMap);
                             } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
                         } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                         }
                         break;
                     case addManagedRunner:
@@ -154,10 +165,10 @@ public class SSLClientThread
                                 final ManagedRunner managedRunner = (ManagedRunner) objectsToModify[0];
                                 Statics.rulesManager.addManagedRunner(managedRunner);
                             } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
                         } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                         }
                         break;
                     case removeManagedRunner:
@@ -167,10 +178,10 @@ public class SSLClientThread
                                 final RunnerId runnerId = (RunnerId) objectsToModify[1];
                                 Statics.rulesManager.removeManagedRunner(marketId, runnerId);
                             } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
                         } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                         }
                         break;
                     case setMarketAmountLimit:
@@ -180,10 +191,10 @@ public class SSLClientThread
                                 final Double amountLimit = (Double) objectsToModify[1];
                                 Statics.rulesManager.setMarketAmountLimit(marketId, amountLimit);
                             } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
                         } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                         }
                         break;
                     case setBackAmountLimit:
@@ -194,10 +205,10 @@ public class SSLClientThread
                                 final Double amountLimit = (Double) objectsToModify[2];
                                 Statics.rulesManager.setRunnerBackAmountLimit(marketId, runnerId, amountLimit);
                             } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
                         } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                         }
                         break;
                     case setLayAmountLimit:
@@ -208,10 +219,10 @@ public class SSLClientThread
                                 final Double amountLimit = (Double) objectsToModify[2];
                                 Statics.rulesManager.setRunnerLayAmountLimit(marketId, runnerId, amountLimit);
                             } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
                         } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                         }
                         break;
                     case setMinBackOdds:
@@ -222,10 +233,10 @@ public class SSLClientThread
                                 final Double odds = (Double) objectsToModify[2];
                                 Statics.rulesManager.setRunnerMinBackOdds(marketId, runnerId, odds);
                             } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
                         } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                         }
                         break;
                     case setMaxLayOdds:
@@ -236,14 +247,14 @@ public class SSLClientThread
                                 final Double odds = (Double) objectsToModify[2];
                                 Statics.rulesManager.setRunnerMaxLayOdds(marketId, runnerId, odds);
                             } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
                         } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                         }
                         break;
                     default:
-                        logger.error("unknown rulesManagerModificationCommand in betty runAfterReceive: {} {}", rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        logger.error("unknown rulesManagerModificationCommand in runAfterReceive: {} {}", rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                 } // end switch
             } else if (command instanceof ExistingFundsModificationCommand) {
                 final ExistingFundsModificationCommand existingFundsModificationCommand = (ExistingFundsModificationCommand) command;
@@ -255,10 +266,10 @@ public class SSLClientThread
                                 final Double rate = (Double) objectsToModify[0];
                                 Statics.existingFunds.setCurrencyRate(rate);
                             } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
                         } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
                         }
                         break;
                     case setReserve:
@@ -267,10 +278,10 @@ public class SSLClientThread
                                 final Double reserve = (Double) objectsToModify[0];
                                 Statics.existingFunds.setReserve(reserve);
                             } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
                         } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
                         }
                         break;
                     case setAvailableFunds:
@@ -279,10 +290,10 @@ public class SSLClientThread
                                 final Double availableFunds = (Double) objectsToModify[0];
                                 Statics.existingFunds.setAvailableFunds(availableFunds);
                             } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
                         } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
                         }
                         break;
                     case setExposure:
@@ -291,206 +302,228 @@ public class SSLClientThread
                                 final Double exposure = (Double) objectsToModify[0];
                                 Statics.existingFunds.setExposure(exposure);
                             } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
                         } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
                         }
                         break;
                     default:
-                        logger.error("unknown existingFundsModificationCommand in betty runAfterReceive: {} {}", existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        logger.error("unknown existingFundsModificationCommand in runAfterReceive: {} {}", existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
                 } // end switch
             } else if (command instanceof SynchronizedMapModificationCommand) {
-                final SynchronizedMapModificationCommand synchronizedMapModificationCommand = (SynchronizedMapModificationCommand) command;
+                @NotNull final SynchronizedMapModificationCommand synchronizedMapModificationCommand = (SynchronizedMapModificationCommand) command;
                 final Object[] objectsToModify = serializableObjectModification.getArray();
-                switch (synchronizedMapModificationCommand) {
-                    case clear:
-                        if (objectsToModify == null) {
-                            Statics.marketCataloguesMap.clear();
-                        } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                        }
-                        break;
-                    case put:
-                        if (objectsToModify != null && objectsToModify.length >= 2) {
-                            if (objectsToModify[0] instanceof String && objectsToModify[1] instanceof MarketCatalogueInterface) {
-                                final String key = (String) objectsToModify[0];
-                                final MarketCatalogueInterface value = (MarketCatalogueInterface) objectsToModify[1];
-                                if (objectsToModify.length == 2) {
-                                    Statics.marketCataloguesMap.put(key, value);
-                                } else if (objectsToModify.length == 3 && objectsToModify[2] instanceof Boolean) {
-                                    final boolean b = (boolean) objectsToModify[2];
-                                    Statics.marketCataloguesMap.put(key, value, b);
+                if (objectsToModify == null || !(objectsToModify[0] instanceof Class<?>)) {
+                    logger.error("improper objectsToModify for SynchronizedMapModificationCommand: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                } else {
+                    final Class<?> clazz = (Class<?>) objectsToModify[0];
+                    @Nullable final StreamSynchronizedMap<String, Serializable> mapToUse;
+
+                    if (MarketCatalogueInterface.class.equals(clazz)) {
+                        //noinspection rawtypes
+                        mapToUse = (StreamSynchronizedMap) Statics.marketCataloguesMap;
+                    } else if (EventInterface.class.equals(clazz)) {
+                        //noinspection rawtypes
+                        mapToUse = (StreamSynchronizedMap) Statics.eventsMap;
+                    } else {
+                        logger.error("unknown streamSynchronizedMap class in runAfterReceive for: {} {}", clazz, Generic.objectToString(receivedCommand));
+                        mapToUse = null;
+                    }
+
+                    if (mapToUse == null) { // nothing to do, error message was already printed
+                    } else {
+                        final int nObjects = objectsToModify.length;
+                        switch (synchronizedMapModificationCommand) {
+                            case clear:
+                                if (nObjects == 1) {
+                                    mapToUse.clear();
                                 } else {
-                                    logger.error("wrong inner size or class objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                    logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
                                 }
-                            } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                            }
-                        } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                        }
-                        break;
-                    case putIfAbsent:
-                        if (objectsToModify != null && objectsToModify.length == 2) {
-                            if (objectsToModify[0] instanceof String && objectsToModify[1] instanceof MarketCatalogueInterface) {
-                                final String key = (String) objectsToModify[0];
-                                final MarketCatalogueInterface value = (MarketCatalogueInterface) objectsToModify[1];
-                                Statics.marketCataloguesMap.putIfAbsent(key, value);
-                            } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                            }
-                        } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                        }
-                        break;
-                    case putAll:
-                        if (objectsToModify != null && objectsToModify.length == 1) {
-                            if (objectsToModify[0] instanceof HashMap) {
-                                @SuppressWarnings("unchecked") final Map<String, MarketCatalogueInterface> m = (Map<String, MarketCatalogueInterface>) objectsToModify[0];
-                                Statics.marketCataloguesMap.putAll(m);
-                            } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                            }
-                        } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                        }
-                        break;
-                    case remove:
-                        if (objectsToModify != null && objectsToModify.length >= 1) {
-                            if (objectsToModify[0] instanceof String) {
-                                final String key = (String) objectsToModify[0];
-                                if (objectsToModify.length == 1) {
-                                    Statics.marketCataloguesMap.remove(key);
-                                } else if (objectsToModify.length == 2 && objectsToModify[1] instanceof MarketCatalogueInterface) {
-                                    final MarketCatalogueInterface value = (MarketCatalogueInterface) objectsToModify[1];
-                                    Statics.marketCataloguesMap.remove(key, value);
+                                break;
+                            case put:
+                                if (nObjects >= 3) {
+                                    if (objectsToModify[1] instanceof String && Generic.objectInstanceOf(clazz, objectsToModify[2])) {
+                                        final String key = (String) objectsToModify[1];
+                                        final Serializable value = (Serializable) objectsToModify[2];
+                                        if (nObjects == 3) {
+                                            mapToUse.put(key, value);
+                                        } else if (nObjects == 4 && objectsToModify[3] instanceof Boolean) {
+                                            final boolean b = (boolean) objectsToModify[3];
+                                            mapToUse.put(key, value, b);
+                                        } else {
+                                            logger.error("wrong inner size or class objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                        }
+                                    } else {
+                                        logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                    }
                                 } else {
-                                    logger.error("wrong inner size or class objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                    logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
                                 }
-                            } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                            }
-                        } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                        }
-                        break;
-                    case removeEntry:
-                        if (objectsToModify != null && objectsToModify.length == 1) {
-                            if (objectsToModify[0] instanceof AbstractMap.SimpleEntry) {
-                                @SuppressWarnings("unchecked") final Map.Entry<String, MarketCatalogueInterface> entry = (Map.Entry<String, MarketCatalogueInterface>) objectsToModify[0];
-                                Statics.marketCataloguesMap.removeEntry(entry);
-                            } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                            }
-                        } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                        }
-                        break;
-                    case removeAllEntries:
-                        if (objectsToModify != null && objectsToModify.length == 1) {
-                            if (objectsToModify[0] instanceof HashSet) {
-                                final Collection<?> set = (Collection<?>) objectsToModify[0];
-                                Statics.marketCataloguesMap.removeAllEntries(set);
-                            } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                            }
-                        } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                        }
-                        break;
-                    case retainAllEntries:
-                        if (objectsToModify != null && objectsToModify.length == 1) {
-                            if (objectsToModify[0] instanceof HashSet) {
-                                final Collection<?> set = (Collection<?>) objectsToModify[0];
-                                Statics.marketCataloguesMap.retainAllEntries(set);
-                            } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                            }
-                        } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                        }
-                        break;
-                    case removeAllKeys:
-                        if (objectsToModify != null && objectsToModify.length == 1) {
-                            if (objectsToModify[0] instanceof HashSet) {
-                                final Collection<?> set = (Collection<?>) objectsToModify[0];
-                                Statics.marketCataloguesMap.removeAllKeys(set);
-                            } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                            }
-                        } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                        }
-                        break;
-                    case retainAllKeys:
-                        if (objectsToModify != null && objectsToModify.length == 1) {
-                            if (objectsToModify[0] instanceof HashSet) {
-                                final Collection<?> set = (Collection<?>) objectsToModify[0];
-                                Statics.marketCataloguesMap.retainAllKeys(set);
-                            } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                            }
-                        } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                        }
-                        break;
-                    case removeValue:
-                        if (objectsToModify != null && objectsToModify.length == 1) {
-                            if (objectsToModify[0] instanceof MarketCatalogueInterface) {
-                                final MarketCatalogueInterface value = (MarketCatalogueInterface) objectsToModify[0];
-                                Statics.marketCataloguesMap.removeValue(value);
-                            } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                            }
-                        } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                        }
-                        break;
-                    case removeValueAll:
-                        if (objectsToModify != null && objectsToModify.length == 1) {
-                            if (objectsToModify[0] instanceof MarketCatalogueInterface) {
-                                final MarketCatalogueInterface value = (MarketCatalogueInterface) objectsToModify[0];
-                                Statics.marketCataloguesMap.removeValueAll(value);
-                            } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                            }
-                        } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                        }
-                        break;
-                    case removeAllValues:
-                        if (objectsToModify != null && objectsToModify.length == 1) {
-                            if (objectsToModify[0] instanceof HashSet) {
-                                final Collection<?> set = (Collection<?>) objectsToModify[0];
-                                Statics.marketCataloguesMap.removeAllValues(set);
-                            } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                            }
-                        } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                        }
-                        break;
-                    case retainAllValues:
-                        if (objectsToModify != null && objectsToModify.length == 1) {
-                            if (objectsToModify[0] instanceof HashSet) {
-                                final Collection<?> set = (Collection<?>) objectsToModify[0];
-                                Statics.marketCataloguesMap.retainAllValues(set);
-                            } else {
-                                logger.error("wrong objectsToModify class in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                            }
-                        } else {
-                            logger.error("wrong size objectsToModify in betty runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                        }
-                        break;
-                    default:
-                        logger.error("unknown synchronizedMapModificationCommand in betty runAfterReceive: {} {}", synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
-                } // end switch
+                                break;
+                            case putIfAbsent:
+                                if (nObjects == 3) {
+                                    if (objectsToModify[1] instanceof String && Generic.objectInstanceOf(clazz, objectsToModify[2])) {
+                                        final String key = (String) objectsToModify[1];
+                                        final Serializable value = (Serializable) objectsToModify[2];
+                                        mapToUse.putIfAbsent(key, value);
+                                    } else {
+                                        logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                    }
+                                } else {
+                                    logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                }
+                                break;
+                            case putAll:
+                                if (nObjects == 2) {
+                                    if (objectsToModify[1] instanceof HashMap) {
+                                        @SuppressWarnings("unchecked") final Map<String, Serializable> m = (Map<String, Serializable>) objectsToModify[1];
+                                        mapToUse.putAll(m);
+                                    } else {
+                                        logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                    }
+                                } else {
+                                    logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                }
+                                break;
+                            case remove:
+                                if (nObjects >= 2) {
+                                    if (objectsToModify[1] instanceof String) {
+                                        final String key = (String) objectsToModify[1];
+                                        if (nObjects == 2) {
+                                            mapToUse.remove(key);
+                                        } else if (nObjects == 3 && Generic.objectInstanceOf(clazz, objectsToModify[2])) {
+                                            final Serializable value = (Serializable) objectsToModify[2];
+                                            mapToUse.remove(key, value);
+                                        } else {
+                                            logger.error("wrong inner size or class objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                        }
+                                    } else {
+                                        logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                    }
+                                } else {
+                                    logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                }
+                                break;
+                            case removeEntry:
+                                if (nObjects == 2) {
+                                    if (objectsToModify[1] instanceof AbstractMap.SimpleEntry) {
+                                        @SuppressWarnings("unchecked") final Map.Entry<String, Serializable> entry = (Map.Entry<String, Serializable>) objectsToModify[1];
+                                        mapToUse.removeEntry(entry);
+                                    } else {
+                                        logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                    }
+                                } else {
+                                    logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                }
+                                break;
+                            case removeAllEntries:
+                                if (nObjects == 2) {
+                                    if (objectsToModify[1] instanceof HashSet) {
+                                        final Collection<?> set = (Collection<?>) objectsToModify[1];
+                                        mapToUse.removeAllEntries(set);
+                                    } else {
+                                        logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                    }
+                                } else {
+                                    logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                }
+                                break;
+                            case retainAllEntries:
+                                if (nObjects == 2) {
+                                    if (objectsToModify[1] instanceof HashSet) {
+                                        final Collection<?> set = (Collection<?>) objectsToModify[1];
+                                        mapToUse.retainAllEntries(set);
+                                    } else {
+                                        logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                    }
+                                } else {
+                                    logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                }
+                                break;
+                            case removeAllKeys:
+                                if (nObjects == 2) {
+                                    if (objectsToModify[1] instanceof HashSet) {
+                                        final Collection<?> set = (Collection<?>) objectsToModify[1];
+                                        mapToUse.removeAllKeys(set);
+                                    } else {
+                                        logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                    }
+                                } else {
+                                    logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                }
+                                break;
+                            case retainAllKeys:
+                                if (nObjects == 2) {
+                                    if (objectsToModify[1] instanceof HashSet) {
+                                        final Collection<?> set = (Collection<?>) objectsToModify[1];
+                                        mapToUse.retainAllKeys(set);
+                                    } else {
+                                        logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                    }
+                                } else {
+                                    logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                }
+                                break;
+                            case removeValue:
+                                if (nObjects == 2) {
+                                    if (Generic.objectInstanceOf(clazz, objectsToModify[1])) {
+                                        final Serializable value = (Serializable) objectsToModify[1];
+                                        mapToUse.removeValue(value);
+                                    } else {
+                                        logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                    }
+                                } else {
+                                    logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                }
+                                break;
+                            case removeValueAll:
+                                if (nObjects == 2) {
+                                    if (Generic.objectInstanceOf(clazz, objectsToModify[1])) {
+                                        final Serializable value = (Serializable) objectsToModify[1];
+                                        mapToUse.removeValueAll(value);
+                                    } else {
+                                        logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                    }
+                                } else {
+                                    logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                }
+                                break;
+                            case removeAllValues:
+                                if (nObjects == 2) {
+                                    if (objectsToModify[1] instanceof HashSet) {
+                                        final Collection<?> set = (Collection<?>) objectsToModify[1];
+                                        mapToUse.removeAllValues(set);
+                                    } else {
+                                        logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                    }
+                                } else {
+                                    logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                }
+                                break;
+                            case retainAllValues:
+                                if (nObjects == 2) {
+                                    if (objectsToModify[1] instanceof HashSet) {
+                                        final Collection<?> set = (Collection<?>) objectsToModify[1];
+                                        mapToUse.retainAllValues(set);
+                                    } else {
+                                        logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                    }
+                                } else {
+                                    logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                                }
+                                break;
+                            default:
+                                logger.error("unsupported synchronizedMapModificationCommand in runAfterReceive: {} {}", synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        } // end switch
+                    }
+                }
             } else {
-                logger.error("unknown command object in betty runAfterReceive: {} {} {} {}", command == null ? null : command.getClass(), command, receivedCommand.getClass(), Generic.objectToString(receivedCommand));
+                logger.error("unknown command object in runAfterReceive: {} {} {} {}", command == null ? null : command.getClass(), command, receivedCommand.getClass(), Generic.objectToString(receivedCommand));
             }
         } else {
-            logger.error("unknown receivedCommand object in betty runAfterReceive: {} {}", receivedCommand.getClass(), Generic.objectToString(receivedCommand));
+            logger.error("unknown receivedCommand object in runAfterReceive: {} {}", receivedCommand.getClass(), Generic.objectToString(receivedCommand));
         }
     }
 

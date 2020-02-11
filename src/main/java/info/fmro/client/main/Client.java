@@ -97,6 +97,7 @@ final class Client {
                 maintenanceThread.join();
             }
 
+            Statics.timer.cancel();
             Statics.threadPoolExecutor.shutdown();
             Statics.scheduledThreadPoolExecutor.shutdown();
 

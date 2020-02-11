@@ -29,6 +29,7 @@ public class ClientRulesManager
         final boolean readSuccessful = super.copyFrom(other, isReadingFromStream);
         if (readSuccessful) {
             GUI.initializeRulesManagerTreeView();
+        } else { // I probably shouldn't initialize if !readSuccessful
         }
         return readSuccessful;
     }

@@ -3,15 +3,16 @@ package info.fmro.client.objects;
 import info.fmro.client.threads.SSLClientThread;
 import info.fmro.shared.stream.cache.market.MarketCache;
 import info.fmro.shared.stream.cache.order.OrderCache;
+import info.fmro.shared.stream.objects.EventInterface;
 import info.fmro.shared.stream.objects.MarketCatalogueInterface;
 import info.fmro.shared.stream.objects.OrdersThreadInterface;
-import info.fmro.shared.stream.objects.StreamSynchronizedMap;
 
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Timer;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -42,7 +43,9 @@ public final class Statics {
     public static final ClientRulesManager rulesManager = new ClientRulesManager();
     public static final ObservedExistingFunds existingFunds = new ObservedExistingFunds();
     public static final OrdersThreadInterface pendingOrdersThread = null; // not used for now
-    public static final StreamSynchronizedMap<String, MarketCatalogueInterface> marketCataloguesMap = new StreamSynchronizedMap<>(128); // <marketId, MarketCatalogue>
+    public static final ClientStreamSynchronizedMap<String, MarketCatalogueInterface> marketCataloguesMap = new ClientStreamSynchronizedMap<>(MarketCatalogueInterface.class, 128); // <marketId, MarketCatalogue>
+    public static final ClientStreamSynchronizedMap<String, EventInterface> eventsMap = new ClientStreamSynchronizedMap<>(EventInterface.class, 128); // <eventId, Event>
+    public static final Timer timer = new Timer();
 
     private Statics() {
     }
