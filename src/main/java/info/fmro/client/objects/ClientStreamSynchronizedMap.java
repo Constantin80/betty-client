@@ -1,8 +1,8 @@
 package info.fmro.client.objects;
 
 import info.fmro.client.main.GUI;
-import info.fmro.shared.stream.objects.EventInterface;
-import info.fmro.shared.stream.objects.MarketCatalogueInterface;
+import info.fmro.shared.entities.Event;
+import info.fmro.shared.entities.MarketCatalogue;
 import info.fmro.shared.stream.objects.StreamSynchronizedMap;
 import info.fmro.shared.utility.Generic;
 import org.jetbrains.annotations.NotNull;
@@ -41,9 +41,9 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
     private synchronized boolean isEventsMap(final Class<? super V> clazz) {
         final boolean result;
         //noinspection ChainOfInstanceofChecks
-        if (clazz == MarketCatalogueInterface.class) {
+        if (clazz == MarketCatalogue.class) {
             result = false;
-        } else if (clazz == EventInterface.class) {
+        } else if (clazz == Event.class) {
             result = true;
         } else {
             result = false;
@@ -101,9 +101,9 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
         if (Objects.equals(value, result)) { // no modification made, I won't send anything
         } else {
             if (this.isEventsMap) {
-                GUI.publicAddEvent((String) key, (EventInterface) value);
+                GUI.publicAddEvent((String) key, (Event) value);
             } else {
-                GUI.publicAddMarket((String) key, (MarketCatalogueInterface) value);
+                GUI.publicAddMarket((String) key, (MarketCatalogue) value);
             }
         }
         return result;
@@ -115,9 +115,9 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
         if (Objects.equals(value, result)) { // no modification made, I won't send anything
         } else {
             if (this.isEventsMap) {
-                GUI.publicAddEvent((String) key, (EventInterface) value);
+                GUI.publicAddEvent((String) key, (Event) value);
             } else {
-                GUI.publicAddMarket((String) key, (MarketCatalogueInterface) value);
+                GUI.publicAddMarket((String) key, (MarketCatalogue) value);
             }
         }
         return result;
@@ -129,9 +129,9 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
         if (Objects.equals(value, result)) { // no modification made, I won't send anything
         } else {
             if (this.isEventsMap) {
-                GUI.publicAddEvent((String) key, (EventInterface) value);
+                GUI.publicAddEvent((String) key, (Event) value);
             } else {
-                GUI.publicAddMarket((String) key, (MarketCatalogueInterface) value);
+                GUI.publicAddMarket((String) key, (MarketCatalogue) value);
             }
         }
         return result;
@@ -142,9 +142,9 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
     public synchronized void putAll(final Map<? extends K, ? extends V> m) {
         super.putAll(m);
         if (this.isEventsMap) {
-            GUI.publicPutAllEvent((Map<String, EventInterface>) m);
+            GUI.publicPutAllEvent((Map<String, Event>) m);
         } else {
-            GUI.publicPutAllMarket((Map<String, MarketCatalogueInterface>) m);
+            GUI.publicPutAllMarket((Map<String, MarketCatalogue>) m);
         }
     }
 
@@ -167,7 +167,7 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
             if (this.isEventsMap) {
                 GUI.publicRemoveEvent((String) key);
             } else {
-                GUI.publicRemoveMarket((MarketCatalogueInterface) value);
+                GUI.publicRemoveMarket((MarketCatalogue) value);
             }
         } else { // no modification made, I won't send anything
         }
@@ -180,7 +180,7 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
             if (this.isEventsMap) {
                 GUI.publicRemoveEvent((String) entry.getKey());
             } else {
-                GUI.publicRemoveMarket((MarketCatalogueInterface) entry.getValue());
+                GUI.publicRemoveMarket((MarketCatalogue) entry.getValue());
             }
         } else { // no modification made, I won't send anything
         }
@@ -191,9 +191,9 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
     @Override
     public synchronized boolean removeAllEntries(final Collection<?> c) {
         if (this.isEventsMap) {
-            GUI.publicRemoveEntriesEvent((Collection<Map.Entry<String, EventInterface>>) c);
+            GUI.publicRemoveEntriesEvent((Collection<Map.Entry<String, Event>>) c);
         } else {
-            GUI.publicRemoveEntriesMarket((Collection<Map.Entry<String, MarketCatalogueInterface>>) c);
+            GUI.publicRemoveEntriesMarket((Collection<Map.Entry<String, MarketCatalogue>>) c);
         }
         return super.removeAllEntries(c);
     }
@@ -202,9 +202,9 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
     @Override
     public synchronized boolean retainAllEntries(final Collection<?> c) {
         if (this.isEventsMap) {
-            GUI.publicRetainEntriesEvent((Collection<Map.Entry<String, EventInterface>>) c);
+            GUI.publicRetainEntriesEvent((Collection<Map.Entry<String, Event>>) c);
         } else {
-            GUI.publicRetainEntriesMarket((Collection<Map.Entry<String, MarketCatalogueInterface>>) c);
+            GUI.publicRetainEntriesMarket((Collection<Map.Entry<String, MarketCatalogue>>) c);
         }
         return super.retainAllEntries(c);
     }
@@ -235,9 +235,9 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
     public synchronized boolean removeValue(final V value) {
         if (containsValue(value)) {
             if (this.isEventsMap) {
-                GUI.publicRemoveEvent((EventInterface) value);
+                GUI.publicRemoveEvent((Event) value);
             } else {
-                GUI.publicRemoveMarket((MarketCatalogueInterface) value);
+                GUI.publicRemoveMarket((MarketCatalogue) value);
             }
         } else { // no modification made, I won't send anything
         }
@@ -248,9 +248,9 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
     public synchronized boolean removeValueAll(final V value) {
         if (containsValue(value)) {
             if (this.isEventsMap) {
-                GUI.publicRemoveValueAllEvent((EventInterface) value);
+                GUI.publicRemoveValueAllEvent((Event) value);
             } else {
-                GUI.publicRemoveValueAllMarket((MarketCatalogueInterface) value);
+                GUI.publicRemoveValueAllMarket((MarketCatalogue) value);
             }
         } else { // no modification made, I won't send anything
         }
@@ -261,9 +261,9 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
     @Override
     public synchronized boolean removeAllValues(final Collection<?> c) {
         if (this.isEventsMap) {
-            GUI.publicRemoveValuesEvent((Collection<EventInterface>) c);
+            GUI.publicRemoveValuesEvent((Collection<Event>) c);
         } else {
-            GUI.publicRemoveValuesMarket((Collection<MarketCatalogueInterface>) c);
+            GUI.publicRemoveValuesMarket((Collection<MarketCatalogue>) c);
         }
         return super.removeAllValues(c);
     }
@@ -272,9 +272,9 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
     @Override
     public synchronized boolean retainAllValues(final Collection<?> c) {
         if (this.isEventsMap) {
-            GUI.publicRetainValuesEvent((Collection<EventInterface>) c);
+            GUI.publicRetainValuesEvent((Collection<Event>) c);
         } else {
-            GUI.publicRetainValuesMarket((Collection<MarketCatalogueInterface>) c);
+            GUI.publicRetainValuesMarket((Collection<MarketCatalogue>) c);
         }
         return super.retainAllValues(c);
     }

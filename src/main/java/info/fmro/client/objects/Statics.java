@@ -1,10 +1,10 @@
 package info.fmro.client.objects;
 
 import info.fmro.client.threads.SSLClientThread;
+import info.fmro.shared.entities.Event;
+import info.fmro.shared.entities.MarketCatalogue;
 import info.fmro.shared.stream.cache.market.MarketCache;
 import info.fmro.shared.stream.cache.order.OrderCache;
-import info.fmro.shared.stream.objects.EventInterface;
-import info.fmro.shared.stream.objects.MarketCatalogueInterface;
 import info.fmro.shared.stream.objects.OrdersThreadInterface;
 
 import java.io.OutputStream;
@@ -43,8 +43,8 @@ public final class Statics {
     public static final ClientRulesManager rulesManager = new ClientRulesManager();
     public static final ObservedExistingFunds existingFunds = new ObservedExistingFunds();
     public static final OrdersThreadInterface pendingOrdersThread = null; // not used for now
-    public static final ClientStreamSynchronizedMap<String, MarketCatalogueInterface> marketCataloguesMap = new ClientStreamSynchronizedMap<>(MarketCatalogueInterface.class, 128); // <marketId, MarketCatalogue>
-    public static final ClientStreamSynchronizedMap<String, EventInterface> eventsMap = new ClientStreamSynchronizedMap<>(EventInterface.class, 128); // <eventId, Event>
+    public static final ClientStreamSynchronizedMap<String, MarketCatalogue> marketCataloguesMap = new ClientStreamSynchronizedMap<>(MarketCatalogue.class, 128); // <marketId, MarketCatalogue>
+    public static final ClientStreamSynchronizedMap<String, Event> eventsMap = new ClientStreamSynchronizedMap<>(Event.class, 128); // <eventId, Event>
     public static final Timer timer = new Timer();
 
     private Statics() {

@@ -1,13 +1,13 @@
 package info.fmro.client.main;
 
 import info.fmro.client.objects.Statics;
+import info.fmro.shared.entities.Event;
+import info.fmro.shared.entities.MarketCatalogue;
 import info.fmro.shared.entities.MarketDescription;
 import info.fmro.shared.logic.ManagedEvent;
 import info.fmro.shared.logic.ManagedMarket;
 import info.fmro.shared.stream.cache.market.Market;
 import info.fmro.shared.stream.definitions.MarketDefinition;
-import info.fmro.shared.stream.objects.EventInterface;
-import info.fmro.shared.stream.objects.MarketCatalogueInterface;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -34,7 +34,7 @@ final class GUIUtils {
     static String getManagedMarketName(final String marketId, @NotNull final ManagedMarket managedMarket) {
         @Nullable String name = null;
 
-        final MarketCatalogueInterface marketCatalogue = Statics.marketCataloguesMap.get(marketId);
+        final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
         if (marketCatalogue != null) {
             name = marketCatalogue.getMarketName();
             if (name == null) {
@@ -70,7 +70,7 @@ final class GUIUtils {
 
         @NotNull final HashSet<String> marketIds = managedEvent.marketIds.copy();
         for (final String marketId : marketIds) {
-            final MarketCatalogueInterface marketCatalogue = Statics.marketCataloguesMap.get(marketId);
+            final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
             name = getManagedEventNameFromMarketCatalogue(marketCatalogue, eventId);
             if (name == null) { // for will continue
             } else { // found the name
@@ -78,8 +78,8 @@ final class GUIUtils {
             }
         }
         if (name == null) { // normal case, the event might not have ManagedMarkets attached, will check the entire map
-            @NotNull final Collection<MarketCatalogueInterface> marketCatalogues = Statics.marketCataloguesMap.valuesCopy();
-            for (final MarketCatalogueInterface marketCatalogue : marketCatalogues) {
+            @NotNull final Collection<MarketCatalogue> marketCatalogues = Statics.marketCataloguesMap.valuesCopy();
+            for (final MarketCatalogue marketCatalogue : marketCatalogues) {
                 name = getManagedEventNameFromMarketCatalogue(marketCatalogue, eventId);
                 if (name == null) { // for will continue
                 } else { // found the name
@@ -93,14 +93,14 @@ final class GUIUtils {
     }
 
     @Nullable
-    private static String getManagedEventNameFromMarketCatalogue(final MarketCatalogueInterface marketCatalogue, @NotNull final String eventId) {
+    private static String getManagedEventNameFromMarketCatalogue(final MarketCatalogue marketCatalogue, @NotNull final String eventId) {
         @Nullable final String name;
         if (marketCatalogue == null) {
             logger.error("null marketCatalogue found during getManagedEventNameFromMarketCatalogue for: {}", eventId);
             Statics.marketCataloguesMap.removeValueAll(null);
             name = null;
         } else {
-            final EventInterface eventStump = marketCatalogue.getEventStump();
+            final Event eventStump = marketCatalogue.getEventStump();
             if (eventStump == null) { // might be normal
                 name = null;
             } else {

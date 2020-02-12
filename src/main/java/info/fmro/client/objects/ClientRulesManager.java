@@ -1,12 +1,12 @@
 package info.fmro.client.objects;
 
 import info.fmro.client.main.GUI;
+import info.fmro.shared.entities.MarketCatalogue;
 import info.fmro.shared.logic.ExistingFunds;
 import info.fmro.shared.logic.ManagedEvent;
 import info.fmro.shared.logic.ManagedMarket;
 import info.fmro.shared.logic.RulesManager;
 import info.fmro.shared.stream.cache.order.OrderCache;
-import info.fmro.shared.stream.objects.MarketCatalogueInterface;
 import info.fmro.shared.stream.objects.OrdersThreadInterface;
 import info.fmro.shared.utility.SynchronizedMap;
 import org.jetbrains.annotations.NotNull;
@@ -48,7 +48,7 @@ public class ClientRulesManager
 
     @Override
     public synchronized void executeCommand(@NotNull final String commandString, @NotNull final OrdersThreadInterface pendingOrdersThread, @NotNull final OrderCache orderCache, @NotNull final ExistingFunds safetyLimits,
-                                            @NotNull final SynchronizedMap<String, ? extends MarketCatalogueInterface> marketCataloguesMap) {
+                                            @NotNull final SynchronizedMap<String, ? extends MarketCatalogue> marketCataloguesMap) {
         logger.error("executeCommand method is not and should not be implemented in Client");
     }
 

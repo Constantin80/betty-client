@@ -1,8 +1,8 @@
 package info.fmro.client.main;
 
+import info.fmro.shared.entities.MarketCatalogue;
 import info.fmro.shared.logic.ManagedRunner;
 import info.fmro.shared.objects.Exposure;
-import info.fmro.shared.stream.objects.MarketCatalogueInterface;
 import info.fmro.shared.stream.objects.RunnerId;
 import org.junit.jupiter.api.Test;
 
@@ -13,12 +13,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SSLClientThreadTest {
     @Test
     void testRunAfterReceive() {
-        final Object testObject = MarketCatalogueInterface.class;
+        final Object testObject = MarketCatalogue.class;
         final Class<?> clazz = (Class<?>) testObject;
         //noinspection AssertEqualsMayBeAssertSame
-        assertEquals(MarketCatalogueInterface.class, clazz, "1");
+        assertEquals(MarketCatalogue.class, clazz, "1");
 
-        assertNotEquals(testObject.getClass(), clazz, "2 - java.lang.Class vs MarketCatalogueInterface");
+        assertNotEquals(testObject.getClass(), clazz, "2 - java.lang.Class vs MarketCatalogue");
 
         assertEquals(testObject, clazz, "3");
 

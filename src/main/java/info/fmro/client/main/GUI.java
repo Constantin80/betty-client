@@ -1,18 +1,20 @@
 package info.fmro.client.main;
 
 import info.fmro.client.objects.Statics;
+import info.fmro.shared.entities.Event;
+import info.fmro.shared.entities.MarketCatalogue;
 import info.fmro.shared.entities.MarketDescription;
 import info.fmro.shared.enums.SynchronizedMapModificationCommand;
 import info.fmro.shared.javafx.FilterableTreeItem;
+import info.fmro.shared.javafx.TreeItemPredicate;
 import info.fmro.shared.logic.ManagedEvent;
 import info.fmro.shared.logic.ManagedMarket;
-import info.fmro.shared.stream.objects.EventInterface;
-import info.fmro.shared.stream.objects.MarketCatalogueInterface;
 import info.fmro.shared.stream.objects.SerializableObjectModification;
 import info.fmro.shared.utility.Formulas;
 import info.fmro.shared.utility.Generic;
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.beans.binding.Bindings;
 import javafx.collections.ObservableList;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.Cursor;
@@ -21,6 +23,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.SplitPane;
+import javafx.scene.control.TextField;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
 import javafx.scene.layout.GridPane;
@@ -32,6 +35,7 @@ import javafx.scene.paint.Color;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import org.apache.commons.collections4.bidimap.DualHashBidiMap;
+import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -62,9 +66,10 @@ public class GUI
     private static final DualHashBidiMap<String, TreeItem<String>> eventsTreeItemMap = new DualHashBidiMap<>(), marketsTreeItemMap = new DualHashBidiMap<>();
     private static final TreeItem<String> leftEventTreeRoot = new TreeItem<>();
     private static final FilterableTreeItem<String> rightEventTreeRoot = new FilterableTreeItem<>(null);
-    private static final ObservableList<TreeItem<String>> leftEventRootChildrenList = leftEventTreeRoot.getChildren(), rightEventRootChildrenList = rightEventTreeRoot.getChildren();
+    private static final ObservableList<TreeItem<String>> leftEventRootChildrenList = leftEventTreeRoot.getChildren(), rightEventRootChildrenList = rightEventTreeRoot.getInternalChildren();
     private static final TreeView<String> rightTreeView = createTreeView(rightEventTreeRoot);
     private static final VBox rightVBox = new VBox(rightTreeView);
+    private static final TextField filterTextField = new TextField();
     private static boolean rightPanelVisible;
 
     static {
@@ -156,42 +161,42 @@ public class GUI
         }
     }
 
-    public static void publicPutAllEvent(final Map<String, EventInterface> m) {
+    public static void publicPutAllEvent(final Map<String, Event> m) {
         if (rightPanelVisible) {
             Platform.runLater(() -> putAllEvent(m));
         } else { // I will only update the right panel if it is visible
         }
     }
 
-    public static void publicPutAllMarket(final Map<String, MarketCatalogueInterface> m) {
+    public static void publicPutAllMarket(final Map<String, MarketCatalogue> m) {
         if (rightPanelVisible) {
             Platform.runLater(() -> putAllMarket(m));
         } else { // I will only update the right panel if it is visible
         }
     }
 
-    public static void publicRemoveEntriesEvent(final Iterable<? extends Map.Entry<String, EventInterface>> c) {
+    public static void publicRemoveEntriesEvent(final Iterable<? extends Map.Entry<String, Event>> c) {
         if (rightPanelVisible) {
             Platform.runLater(() -> removeEntriesEvent(c));
         } else { // I will only update the right panel if it is visible
         }
     }
 
-    public static void publicRemoveEntriesMarket(final Iterable<? extends Map.Entry<String, MarketCatalogueInterface>> c) {
+    public static void publicRemoveEntriesMarket(final Iterable<? extends Map.Entry<String, MarketCatalogue>> c) {
         if (rightPanelVisible) {
             Platform.runLater(() -> removeEntriesMarket(c));
         } else { // I will only update the right panel if it is visible
         }
     }
 
-    public static void publicRetainEntriesEvent(final Collection<? extends Map.Entry<String, EventInterface>> c) {
+    public static void publicRetainEntriesEvent(final Collection<? extends Map.Entry<String, Event>> c) {
         if (rightPanelVisible) {
             Platform.runLater(() -> retainEntriesEvent(c));
         } else { // I will only update the right panel if it is visible
         }
     }
 
-    public static void publicRetainEntriesMarket(final Collection<? extends Map.Entry<String, MarketCatalogueInterface>> c) {
+    public static void publicRetainEntriesMarket(final Collection<? extends Map.Entry<String, MarketCatalogue>> c) {
         if (rightPanelVisible) {
             Platform.runLater(() -> retainEntriesMarket(c));
         } else { // I will only update the right panel if it is visible
@@ -226,42 +231,42 @@ public class GUI
         }
     }
 
-    public static void publicRemoveValueAllEvent(final EventInterface value) {
+    public static void publicRemoveValueAllEvent(final Event value) {
         if (rightPanelVisible) {
             Platform.runLater(() -> removeEvent(value));
         } else { // I will only update the right panel if it is visible
         }
     }
 
-    public static void publicRemoveValueAllMarket(final MarketCatalogueInterface value) {
+    public static void publicRemoveValueAllMarket(final MarketCatalogue value) {
         if (rightPanelVisible) {
             Platform.runLater(() -> removeMarket(value));
         } else { // I will only update the right panel if it is visible
         }
     }
 
-    public static void publicRemoveValuesEvent(final Iterable<? extends EventInterface> c) {
+    public static void publicRemoveValuesEvent(final Iterable<? extends Event> c) {
         if (rightPanelVisible) {
             Platform.runLater(() -> removeValuesEvent(c));
         } else { // I will only update the right panel if it is visible
         }
     }
 
-    public static void publicRemoveValuesMarket(final Iterable<? extends MarketCatalogueInterface> c) {
+    public static void publicRemoveValuesMarket(final Iterable<? extends MarketCatalogue> c) {
         if (rightPanelVisible) {
             Platform.runLater(() -> removeValuesMarket(c));
         } else { // I will only update the right panel if it is visible
         }
     }
 
-    public static void publicRetainValuesEvent(final Collection<? extends EventInterface> c) {
+    public static void publicRetainValuesEvent(final Collection<? extends Event> c) {
         if (rightPanelVisible) {
             Platform.runLater(() -> retainValuesEvent(c));
         } else { // I will only update the right panel if it is visible
         }
     }
 
-    public static void publicRetainValuesMarket(final Collection<? extends MarketCatalogueInterface> c) {
+    public static void publicRetainValuesMarket(final Collection<? extends MarketCatalogue> c) {
         if (rightPanelVisible) {
             Platform.runLater(() -> retainValuesMarket(c));
         } else { // I will only update the right panel if it is visible
@@ -275,28 +280,28 @@ public class GUI
         }
     }
 
-    public static void publicRemoveEvent(final EventInterface event) {
+    public static void publicRemoveEvent(final Event event) {
         if (rightPanelVisible) {
             Platform.runLater(() -> removeEvent(event));
         } else { // I will only update the right panel if it is visible
         }
     }
 
-    public static void publicAddEvent(final String eventId, final EventInterface event) {
+    public static void publicAddEvent(final String eventId, final Event event) {
         if (rightPanelVisible) {
             Platform.runLater(() -> addEvent(eventId, event));
         } else { // I will only update the right panel if it is visible
         }
     }
 
-    public static void publicAddMarket(final String marketId, final MarketCatalogueInterface market) {
+    public static void publicAddMarket(final String marketId, final MarketCatalogue market) {
         if (rightPanelVisible) {
             Platform.runLater(() -> addMarket(marketId, market));
         } else { // I will only update the right panel if it is visible
         }
     }
 
-    public static void publicRemoveMarket(final MarketCatalogueInterface market) {
+    public static void publicRemoveMarket(final MarketCatalogue market) {
         if (rightPanelVisible) {
             Platform.runLater(() -> removeMarket(market));
         } else { // I will only update the right panel if it is visible
@@ -310,28 +315,28 @@ public class GUI
         }
     }
 
-    private static void putAllEvent(final Map<String, EventInterface> m) {
+    private static void putAllEvent(final Map<String, Event> m) {
         if (m == null) { // nothing to be done
         } else {
-            for (@NotNull final Map.Entry<String, EventInterface> entry : m.entrySet()) {
+            for (@NotNull final Map.Entry<String, Event> entry : m.entrySet()) {
                 addEvent(entry);
             }
         }
     }
 
-    private static void putAllMarket(final Map<String, MarketCatalogueInterface> m) {
+    private static void putAllMarket(final Map<String, MarketCatalogue> m) {
         if (m == null) { // nothing to be done
         } else {
-            for (@NotNull final Map.Entry<String, MarketCatalogueInterface> entry : m.entrySet()) {
+            for (@NotNull final Map.Entry<String, MarketCatalogue> entry : m.entrySet()) {
                 addMarket(entry);
             }
         }
     }
 
-    private static void removeEntriesEvent(final Iterable<? extends Map.Entry<String, EventInterface>> c) {
+    private static void removeEntriesEvent(final Iterable<? extends Map.Entry<String, Event>> c) {
         if (c == null) { // nothing to be done
         } else {
-            for (final Map.Entry<String, EventInterface> entry : c) {
+            for (final Map.Entry<String, Event> entry : c) {
                 if (entry == null) {
                     logger.error("null entry in removeEntriesEvent for: {}", Generic.objectToString(c));
                 } else {
@@ -341,10 +346,10 @@ public class GUI
         }
     }
 
-    private static void removeEntriesMarket(final Iterable<? extends Map.Entry<String, MarketCatalogueInterface>> c) {
+    private static void removeEntriesMarket(final Iterable<? extends Map.Entry<String, MarketCatalogue>> c) {
         if (c == null) { // nothing to be done
         } else {
-            for (final Map.Entry<String, MarketCatalogueInterface> entry : c) {
+            for (final Map.Entry<String, MarketCatalogue> entry : c) {
                 if (entry == null) {
                     logger.error("null entry in removeEntriesMarket for: {}", Generic.objectToString(c));
                 } else {
@@ -354,11 +359,11 @@ public class GUI
         }
     }
 
-    private static void retainEntriesEvent(final Collection<? extends Map.Entry<String, EventInterface>> c) {
+    private static void retainEntriesEvent(final Collection<? extends Map.Entry<String, Event>> c) {
         if (c == null) { // nothing to be done
         } else {
             final Collection<String> retainEventIds = new HashSet<>(Generic.getCollectionCapacity(c));
-            for (final Map.Entry<String, EventInterface> entry : c) {
+            for (final Map.Entry<String, Event> entry : c) {
                 if (entry == null) {
                     logger.error("null entry in retainEntriesEvent for: {}", Generic.objectToString(c));
                 } else {
@@ -374,11 +379,11 @@ public class GUI
         }
     }
 
-    private static void retainEntriesMarket(final Collection<? extends Map.Entry<String, MarketCatalogueInterface>> c) {
+    private static void retainEntriesMarket(final Collection<? extends Map.Entry<String, MarketCatalogue>> c) {
         if (c == null) { // nothing to be done
         } else {
             final Collection<String> retainMarketIds = new HashSet<>(Generic.getCollectionCapacity(c));
-            for (final Map.Entry<String, MarketCatalogueInterface> entry : c) {
+            for (final Map.Entry<String, MarketCatalogue> entry : c) {
                 if (entry == null) {
                     logger.error("null entry in retainEntriesMarket for: {}", Generic.objectToString(c));
                 } else {
@@ -436,29 +441,29 @@ public class GUI
         }
     }
 
-    private static void removeValuesEvent(final Iterable<? extends EventInterface> c) {
+    private static void removeValuesEvent(final Iterable<? extends Event> c) {
         if (c == null) { // nothing to be done
         } else {
-            for (final EventInterface event : c) {
+            for (final Event event : c) {
                 removeEvent(event);
             }
         }
     }
 
-    private static void removeValuesMarket(final Iterable<? extends MarketCatalogueInterface> c) {
+    private static void removeValuesMarket(final Iterable<? extends MarketCatalogue> c) {
         if (c == null) { // nothing to be done
         } else {
-            for (final MarketCatalogueInterface market : c) {
+            for (final MarketCatalogue market : c) {
                 removeMarket(market);
             }
         }
     }
 
-    private static void retainValuesEvent(final Collection<? extends EventInterface> c) {
+    private static void retainValuesEvent(final Collection<? extends Event> c) {
         if (c == null) { // nothing to be done
         } else {
             final Collection<String> retainEventIds = new HashSet<>(Generic.getCollectionCapacity(c));
-            for (final EventInterface event : c) {
+            for (final Event event : c) {
                 if (event == null) {
                     logger.error("null event in retainValuesEvent for: {}", Generic.objectToString(c));
                 } else {
@@ -474,11 +479,11 @@ public class GUI
         }
     }
 
-    private static void retainValuesMarket(final Collection<? extends MarketCatalogueInterface> c) {
+    private static void retainValuesMarket(final Collection<? extends MarketCatalogue> c) {
         if (c == null) { // nothing to be done
         } else {
             final Collection<String> retainMarketIds = new HashSet<>(Generic.getCollectionCapacity(c));
-            for (final MarketCatalogueInterface market : c) {
+            for (final MarketCatalogue market : c) {
                 if (market == null) {
                     logger.error("null market in retainValuesMarket for: {}", Generic.objectToString(c));
                 } else {
@@ -494,7 +499,7 @@ public class GUI
         }
     }
 
-    private static void removeEvent(final EventInterface event) {
+    private static void removeEvent(final Event event) {
         final String eventId = event == null ? null : event.getId();
         removeEvent(eventId);
     }
@@ -565,7 +570,7 @@ public class GUI
     }
 
     @SuppressWarnings("UnusedReturnValue")
-    private static boolean removeMarket(final MarketCatalogueInterface market) {
+    private static boolean removeMarket(final MarketCatalogue market) {
         final String marketId = market == null ? null : market.getMarketId();
         final String eventId = Formulas.getEventIdOfMarketId(marketId, Statics.marketCataloguesMap);
         return removeMarket(marketId, eventId);
@@ -743,8 +748,8 @@ public class GUI
 
     private static int addMarkets() {
         int modified = 0;
-        @NotNull final HashMap<String, MarketCatalogueInterface> mapCopy = Statics.marketCataloguesMap.copy();
-        for (@NotNull final Map.Entry<String, MarketCatalogueInterface> entry : mapCopy.entrySet()) {
+        @NotNull final HashMap<String, MarketCatalogue> mapCopy = Statics.marketCataloguesMap.copy();
+        for (@NotNull final Map.Entry<String, MarketCatalogue> entry : mapCopy.entrySet()) {
             modified += addMarket(entry);
         }
         return modified;
@@ -761,17 +766,17 @@ public class GUI
 
     @SuppressWarnings("UnusedReturnValue")
     private static int addMarket(final String marketId) {
-        final MarketCatalogueInterface market = Statics.marketCataloguesMap.get(marketId);
+        final MarketCatalogue market = Statics.marketCataloguesMap.get(marketId);
         return addMarket(marketId, market);
     }
 
-    private static int addMarket(@NotNull final Map.Entry<String, ? extends MarketCatalogueInterface> entry) {
+    private static int addMarket(@NotNull final Map.Entry<String, ? extends MarketCatalogue> entry) {
         final String marketId = entry.getKey();
-        final MarketCatalogueInterface market = entry.getValue();
+        final MarketCatalogue market = entry.getValue();
         return addMarket(marketId, market);
     }
 
-    private static int addMarket(final String marketId, final MarketCatalogueInterface market) {
+    private static int addMarket(final String marketId, final MarketCatalogue market) {
         int modified = 0;
         if (marketsTreeItemMap.containsKey(marketId)) { // already contained, nothing to be done, won't update the object here
         } else {
@@ -874,20 +879,20 @@ public class GUI
 
     private static int addEvents() {
         int modified = 0;
-        @NotNull final HashMap<String, EventInterface> mapCopy = Statics.eventsMap.copy();
-        for (@NotNull final Map.Entry<String, EventInterface> entry : mapCopy.entrySet()) {
+        @NotNull final HashMap<String, Event> mapCopy = Statics.eventsMap.copy();
+        for (@NotNull final Map.Entry<String, Event> entry : mapCopy.entrySet()) {
             modified += addEvent(entry);
         }
         return modified;
     }
 
-    private static int addEvent(@NotNull final Map.Entry<String, ? extends EventInterface> entry) {
+    private static int addEvent(@NotNull final Map.Entry<String, ? extends Event> entry) {
         final String eventId = entry.getKey();
-        final EventInterface event = entry.getValue();
+        final Event event = entry.getValue();
         return addEvent(eventId, event);
     }
 
-    private static int addEvent(final String eventId, final EventInterface event) {
+    private static int addEvent(final String eventId, final Event event) {
         int modified = 0;
         if (eventsTreeItemMap.containsKey(eventId)) { // already contained, nothing to be done, won't update the object here
         } else {
@@ -943,9 +948,8 @@ public class GUI
         }
         return modified;
     }
-// todo bind to text search
 
-    private static int checkMarketsOnDefaultNode(@NotNull final EventInterface event, @NotNull final TreeItem<String> eventTreeItem) {
+    private static int checkMarketsOnDefaultNode(@NotNull final Event event, @NotNull final TreeItem<String> eventTreeItem) {
         int modified = 0;
         final TreeItem<String> defaultEvent = eventsTreeItemMap.get(null);
         if (defaultEvent != null) {
@@ -1054,7 +1058,7 @@ public class GUI
     }
 
     //    @Nullable
-//    private static String getManagedEventNameFromMarketCatalogue(final MarketCatalogueInterface marketCatalogue, @NotNull final ManagedEvent managedEvent) {
+//    private static String getManagedEventNameFromMarketCatalogue(final MarketCatalogue marketCatalogue, @NotNull final ManagedEvent managedEvent) {
 //        @Nullable final String eventId = managedEvent.getId(), result;
 //        if (eventId == null) {
 //            logger.error("null eventId in getManagedEventNameFromMarketCatalogue for: {}", Generic.objectToString(managedEvent));
@@ -1111,7 +1115,7 @@ public class GUI
         refreshEventsButton.setMnemonicParsing(true);
         refreshEventsButton.setOnAction(event -> {
             refreshEventsButton.setDisable(true);
-            Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(SynchronizedMapModificationCommand.refresh, EventInterface.class)); // send command to refresh event list
+            Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(SynchronizedMapModificationCommand.refresh, Event.class)); // send command to refresh event list
 
             @SuppressWarnings("AnonymousInnerClassMayBeStatic") final TimerTask task = new TimerTask() {
                 public void run() {
@@ -1120,6 +1124,17 @@ public class GUI
             };
             Statics.timer.schedule(task, 5_000L);
         });
+
+        filterTextField.setPromptText("Enter filter text ...");
+        rightVBox.getChildren().add(filterTextField);
+
+        rightEventTreeRoot.predicateProperty().bind(Bindings.createObjectBinding(() -> {
+            if (filterTextField.getText() == null || filterTextField.getText().isEmpty()) {
+                //noinspection ConstantConditions
+                return null;
+            }
+            return TreeItemPredicate.create(actor -> StringUtils.containsIgnoreCase(actor.toString(), filterTextField.getText()));
+        }, filterTextField.textProperty()));
 
         final Button rightPaneButton = new Button("Show _events");
         rightPaneButton.setMnemonicParsing(true);
@@ -1137,6 +1152,8 @@ public class GUI
                 mainSplitPaneNodesList.add(rightVBox);
                 topBarNodesList.add(topBarNodesList.size() - 1, refreshEventsButton);
                 rightPaneButton.setText("Hide _events");
+                filterTextField.requestFocus();
+                filterTextField.end();
 
                 //noinspection AssignmentToStaticFieldFromInstanceMethod
                 GUI.rightPanelVisible = true;
@@ -1145,11 +1162,15 @@ public class GUI
 
         topBarNodesList.addAll(fixedTotalFundsLabel, totalFundsLabel, fixedAvailableLabel, availableLabel, fixedReserveLabel, reserveLabel, fixedExposureLabel, exposureLabel, hugeSpacer, rightPaneButton);
 
+        rightTreeView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+            final String eventId = eventsTreeItemMap.getKey(newValue);
+            Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(SynchronizedMapModificationCommand.getMarkets, Event.class, eventId)); // send command to refresh event list
+        });
+
         primaryStage.show();
 
         logger.info("GUI has started");
 
         Statics.scheduledThreadPoolExecutor.scheduleAtFixedRate(GUI::checkTreeItemsWithNullName, 1L, 1L, TimeUnit.MINUTES);
-
     }
 }

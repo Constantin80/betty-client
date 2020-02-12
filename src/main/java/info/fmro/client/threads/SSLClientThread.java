@@ -1,6 +1,8 @@
 package info.fmro.client.threads;
 
 import info.fmro.client.objects.Statics;
+import info.fmro.shared.entities.Event;
+import info.fmro.shared.entities.MarketCatalogue;
 import info.fmro.shared.enums.ExistingFundsModificationCommand;
 import info.fmro.shared.enums.RulesManagerModificationCommand;
 import info.fmro.shared.enums.SynchronizedMapModificationCommand;
@@ -13,8 +15,6 @@ import info.fmro.shared.stream.cache.market.MarketCache;
 import info.fmro.shared.stream.cache.order.OrderCache;
 import info.fmro.shared.stream.definitions.MarketChangeMessage;
 import info.fmro.shared.stream.definitions.OrderChangeMessage;
-import info.fmro.shared.stream.objects.EventInterface;
-import info.fmro.shared.stream.objects.MarketCatalogueInterface;
 import info.fmro.shared.stream.objects.PoisonPill;
 import info.fmro.shared.stream.objects.RunnerId;
 import info.fmro.shared.stream.objects.SerializableObjectModification;
@@ -73,11 +73,11 @@ public class SSLClientThread
         } else if (receivedCommand instanceof StreamSynchronizedMap<?, ?>) {
             @NotNull final StreamSynchronizedMap<?, ?> streamSynchronizedMap = (StreamSynchronizedMap<?, ?>) receivedCommand;
             final Class<?> clazz = streamSynchronizedMap.getClazz();
-            if (MarketCatalogueInterface.class.equals(clazz)) {
-                @SuppressWarnings("unchecked") @NotNull final StreamSynchronizedMap<String, MarketCatalogueInterface> streamMarketCatalogueMap = (StreamSynchronizedMap<String, MarketCatalogueInterface>) receivedCommand;
+            if (MarketCatalogue.class.equals(clazz)) {
+                @SuppressWarnings("unchecked") @NotNull final StreamSynchronizedMap<String, MarketCatalogue> streamMarketCatalogueMap = (StreamSynchronizedMap<String, MarketCatalogue>) receivedCommand;
                 Statics.marketCataloguesMap.copyFromStream(streamMarketCatalogueMap);
-            } else if (EventInterface.class.equals(clazz)) {
-                @SuppressWarnings("unchecked") @NotNull final StreamSynchronizedMap<String, EventInterface> streamEventMap = (StreamSynchronizedMap<String, EventInterface>) receivedCommand;
+            } else if (Event.class.equals(clazz)) {
+                @SuppressWarnings("unchecked") @NotNull final StreamSynchronizedMap<String, Event> streamEventMap = (StreamSynchronizedMap<String, Event>) receivedCommand;
                 Statics.eventsMap.copyFromStream(streamEventMap);
             } else {
                 logger.error("unknown streamSynchronizedMap class in runAfterReceive for: {} {}", clazz, Generic.objectToString(receivedCommand));
@@ -320,10 +320,10 @@ public class SSLClientThread
                     final Class<?> clazz = (Class<?>) objectsToModify[0];
                     @Nullable final StreamSynchronizedMap<String, Serializable> mapToUse;
 
-                    if (MarketCatalogueInterface.class.equals(clazz)) {
+                    if (MarketCatalogue.class.equals(clazz)) {
                         //noinspection rawtypes
                         mapToUse = (StreamSynchronizedMap) Statics.marketCataloguesMap;
-                    } else if (EventInterface.class.equals(clazz)) {
+                    } else if (Event.class.equals(clazz)) {
                         //noinspection rawtypes
                         mapToUse = (StreamSynchronizedMap) Statics.eventsMap;
                     } else {
