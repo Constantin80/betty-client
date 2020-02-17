@@ -62,15 +62,13 @@ final class Client {
             }
 
             // threads only get started below this line
+            new Thread(() -> Application.launch(GUI.class)).start(); // this needs to start before the sslClientThread
 
             final MaintenanceThread maintenanceThread = new MaintenanceThread();
             maintenanceThread.start();
             final Thread timeJumpDetectorThread = new Thread(new TimeJumpDetectorThread());
             timeJumpDetectorThread.start();
             Statics.sslClientThread.start();
-
-            new Thread(() -> Application.launch(GUI.class)).start();
-//            Application.launch(GUI.class);
 
             while (!Statics.mustStop.get()) {
                 //noinspection NestedTryStatement

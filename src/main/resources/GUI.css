@@ -20,6 +20,54 @@
 -fx-text-fill: yellow;
 }
 
+.grid-pane{
+-fx-background-color: black;
+-fx-border-color: green;
+-fx-border-width: 0;
+-fx-font-size: 14;
+-fx-text-fill: yellow;
+}
+
+.split-pane{
+-fx-background-color: black;
+-fx-border-color: green;
+-fx-border-width: 0;
+-fx-font-size: 14;
+-fx-text-fill: yellow;
+}
+
+.context-menu{
+-fx-background-color: black;
+-fx-border-color: green;
+-fx-border-width: 0;
+-fx-font-size: 14;
+-fx-text-fill: white;
+}
+
+.menu-item{
+-fx-background-color: black;
+-fx-border-color: green;
+-fx-border-width: 0;
+-fx-font-size: 14;
+-fx-text-fill: white;
+}
+
+.menu-item .label{
+-fx-background-color: black;
+-fx-border-color: green;
+-fx-border-width: 0;
+-fx-font-size: 14;
+-fx-text-fill: white;
+}
+
+.text-field{
+-fx-background-color: black;
+-fx-border-color: green;
+-fx-border-width: 0;
+-fx-font-size: 14;
+-fx-text-fill: white;
+}
+
 .tree-cell{
 -fx-background-color: black;
 -fx-border-color: green;

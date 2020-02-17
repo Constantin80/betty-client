@@ -34,6 +34,7 @@ import javax.net.ssl.SSLSocketFactory;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.Serializable;
+import java.net.ConnectException;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -163,7 +164,7 @@ public class SSLClientThread
                         if (objectsToModify != null && objectsToModify.length == 1) {
                             if (objectsToModify[0] instanceof ManagedRunner) {
                                 final ManagedRunner managedRunner = (ManagedRunner) objectsToModify[0];
-                                Statics.rulesManager.addManagedRunner(managedRunner);
+                                Statics.rulesManager.addManagedRunner(managedRunner, Statics.marketCataloguesMap, Statics.marketCache, Statics.rulesManager, Statics.eventsMap);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
@@ -246,6 +247,32 @@ public class SSLClientThread
                                 final RunnerId runnerId = (RunnerId) objectsToModify[1];
                                 final Double odds = (Double) objectsToModify[2];
                                 Statics.rulesManager.setRunnerMaxLayOdds(marketId, runnerId, odds);
+                            } else {
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            }
+                        } else {
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        }
+                        break;
+                    case setMarketName:
+                        if (objectsToModify != null && objectsToModify.length == 2) {
+                            if (objectsToModify[0] instanceof String && objectsToModify[1] instanceof String) {
+                                final String marketId = (String) objectsToModify[0];
+                                final String marketName = (String) objectsToModify[1];
+                                Statics.rulesManager.setMarketName(marketId, marketName);
+                            } else {
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            }
+                        } else {
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        }
+                        break;
+                    case setEventName:
+                        if (objectsToModify != null && objectsToModify.length == 2) {
+                            if (objectsToModify[0] instanceof String && objectsToModify[1] instanceof String) {
+                                final String eventId = (String) objectsToModify[0];
+                                final String eventName = (String) objectsToModify[1];
+                                Statics.rulesManager.setEventName(eventId, eventName);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
@@ -579,7 +606,11 @@ public class SSLClientThread
                     if (Statics.mustStop.get()) {
                         logger.info("IOException received in SSLClientThread, as program stops");
                     } else {
-                        logger.error("IOException in SSLClientThread, will retry", e);
+                        if (e.getClass().equals(ConnectException.class)) {
+                            logger.warn("ConnectException in SSLClientThread, will retry: {}", e.toString());
+                        } else {
+                            logger.error("IOException in SSLClientThread, will retry", e);
+                        }
                     }
                 } catch (ClassNotFoundException e) {
                     logger.error("STRANGE ClassNotFoundException in SSLClientThread, will retry", e);
