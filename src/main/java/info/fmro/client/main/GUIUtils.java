@@ -4,10 +4,12 @@ import info.fmro.client.objects.Statics;
 import info.fmro.shared.entities.Event;
 import info.fmro.shared.entities.MarketCatalogue;
 import info.fmro.shared.entities.MarketDescription;
+import info.fmro.shared.enums.RulesManagerModificationCommand;
 import info.fmro.shared.logic.ManagedEvent;
 import info.fmro.shared.logic.ManagedMarket;
 import info.fmro.shared.stream.cache.market.Market;
 import info.fmro.shared.stream.definitions.MarketDefinition;
+import info.fmro.shared.stream.objects.SerializableObjectModification;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -34,32 +36,39 @@ final class GUIUtils {
 
     @Nullable
     static String getManagedMarketName(final String marketId, @NotNull final ManagedMarket managedMarket) {
-        @Nullable String name = managedMarket.getMarketName(Statics.marketCache, Statics.rulesManager);
+        @Nullable String name = managedMarket.simpleGetMarketName();
         if (name == null) {
-            final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
-            if (marketCatalogue != null) {
-                name = marketCatalogue.getMarketName();
-                if (name == null) {
-                    final MarketDescription marketDescription = marketCatalogue.getDescription();
-                    if (marketDescription != null) {
-                        name = marketDescription.getMarketType();
-                    }
-                } else { // found the name, won't pursue further
-                }
-            } else { // no marketCatalogue, can't pursue the name further on this branch
-            }
-
+            name = managedMarket.getMarketName(Statics.marketCache, Statics.rulesManager);
             if (name == null) {
-                final Market market = managedMarket.getMarket(Statics.marketCache, Statics.rulesManager);
-                if (market != null) {
-                    final MarketDefinition marketDefinition = market.getMarketDefinition();
-                    if (marketDefinition != null) {
-                        name = marketDefinition.getMarketType();
-                    } else { // no marketDefinition, I can't find the name here
+                final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
+                if (marketCatalogue != null) {
+                    name = marketCatalogue.getMarketName();
+                    if (name == null) {
+                        final MarketDescription marketDescription = marketCatalogue.getDescription();
+                        if (marketDescription != null) {
+                            name = marketDescription.getMarketType();
+                        }
+                    } else { // found the name, won't pursue further
                     }
-                } else { // no market attached, I can't find the name here
+                } else { // no marketCatalogue, can't pursue the name further on this branch
                 }
-            } else { // I found it before this if
+
+                if (name == null) {
+                    final Market market = managedMarket.getMarket(Statics.marketCache, Statics.rulesManager);
+                    if (market != null) {
+                        final MarketDefinition marketDefinition = market.getMarketDefinition();
+                        if (marketDefinition != null) {
+                            name = marketDefinition.getMarketType();
+                        } else { // no marketDefinition, I can't find the name here
+                        }
+                    } else { // no market attached, I can't find the name here
+                    }
+                } else { // I found it before this if
+                }
+            } else { // found the name, will continue
+            }
+            if (name != null) { // name became not null
+                Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(RulesManagerModificationCommand.setMarketName, marketId, name));
             }
         } else { // found the name, nothing more to be done
         }
@@ -68,29 +77,35 @@ final class GUIUtils {
 
     @Nullable
     static String getManagedEventName(@NotNull final ManagedEvent managedEvent) {
-        @Nullable String name = managedEvent.getEventName(Statics.eventsMap, Statics.rulesManager);
+        @Nullable String name = managedEvent.simpleGetEventName();
         if (name == null) {
+            name = managedEvent.getEventName(Statics.eventsMap, Statics.rulesManager);
             final String eventId = managedEvent.getId();
-
-            @NotNull final HashSet<String> marketIds = managedEvent.marketIds.copy();
-            for (final String marketId : marketIds) {
-                final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
-                name = getManagedEventNameFromMarketCatalogue(marketCatalogue, eventId);
-                if (name == null) { // for will continue
-                } else { // found the name
-                    break;
-                }
-            }
-            if (name == null) { // normal case, the event might not have ManagedMarkets attached, will check the entire map
-                @NotNull final Collection<MarketCatalogue> marketCatalogues = Statics.marketCataloguesMap.valuesCopy();
-                for (final MarketCatalogue marketCatalogue : marketCatalogues) {
+            if (name == null) {
+                @NotNull final HashSet<String> marketIds = managedEvent.marketIds.copy();
+                for (final String marketId : marketIds) {
+                    final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
                     name = getManagedEventNameFromMarketCatalogue(marketCatalogue, eventId);
                     if (name == null) { // for will continue
                     } else { // found the name
                         break;
                     }
                 }
-            } else { // found the name, nothing more to be done
+                if (name == null) { // normal case, the event might not have ManagedMarkets attached, will check the entire map
+                    @NotNull final Collection<MarketCatalogue> marketCatalogues = Statics.marketCataloguesMap.valuesCopy();
+                    for (final MarketCatalogue marketCatalogue : marketCatalogues) {
+                        name = getManagedEventNameFromMarketCatalogue(marketCatalogue, eventId);
+                        if (name == null) { // for will continue
+                        } else { // found the name
+                            break;
+                        }
+                    }
+                } else { // found the name, nothing more to be done
+                }
+            } else { // found the name, will continue
+            }
+            if (name != null) { // name became not null
+                Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(RulesManagerModificationCommand.setEventName, eventId, name));
             }
         } else { // found the name, nothing more to be done
         }
@@ -133,12 +148,8 @@ final class GUIUtils {
             logger.error("null name in markNameAsExpired");
             result = null;
         } else {
-            if (nameIsMarkedAsExpired(name)) {
-                logger.error("name already marked as expired: {}", name);
-                result = name;
-            } else {
-                result = addExpiredMarker(name);
-            }
+            // logger.error("name already marked as expired: {}", name); // normal behavior, no need to print anything
+            result = nameIsMarkedAsExpired(name) ? name : addExpiredMarker(name);
         }
         return result;
     }

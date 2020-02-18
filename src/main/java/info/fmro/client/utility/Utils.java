@@ -31,6 +31,19 @@ public final class Utils {
         }
     }
 
+    public static void removeManagedEvent(final String eventId) {
+        if (eventId == null) {
+            logger.error("null eventId in removeManagedEvent");
+        } else {
+            if (Statics.rulesManager.events.containsKey(eventId)) {
+                logger.info("client->server remove ManagedEvent {}", eventId);
+                Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(RulesManagerModificationCommand.removeManagedEvent, eventId));
+            } else {
+                logger.warn("trying to remove non existing ManagedEvent {}", eventId);
+            }
+        }
+    }
+
     public static void createManagedMarket(final String marketId, final String eventId) {
         if (marketId == null) {
             logger.error("null marketId in createManagedMarket: {}", eventId);
@@ -43,6 +56,19 @@ public final class Utils {
                 logger.info("client->server create default ManagedMarket for {} {} {} {}", eventId, marketId, eventName, marketName);
                 final ManagedMarket managedMarket = new ManagedMarket(marketId, Statics.marketCache, Statics.rulesManager);
                 Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(RulesManagerModificationCommand.addManagedMarket, marketId, managedMarket));
+            }
+        }
+    }
+
+    public static void removeManagedMarket(final String marketId) {
+        if (marketId == null) {
+            logger.error("null marketId in removeManagedMarket");
+        } else {
+            if (Statics.rulesManager.markets.containsKey(marketId)) {
+                logger.info("client->server remove ManagedMarket {}", marketId);
+                Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(RulesManagerModificationCommand.removeManagedMarket, marketId));
+            } else {
+                logger.error("trying to remove non existing ManagedMarket {}", marketId);
             }
         }
     }

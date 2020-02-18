@@ -107,3 +107,46 @@
 -fx-font-size: 16;
 -fx-text-fill: white;
 }
+
+.scroll-bar:horizontal, .scroll-bar:vertical{
+    -fx-background-color: black;
+}
+
+.increment-button, .decrement-button {
+    -fx-background-color: black;
+	-fx-border-color: green;
+}
+
+.scroll-bar:horizontal .track, .scroll-bar:vertical .track{
+     -fx-background-color: green;
+	 -fx-border-color: black;
+	 -fx-background-radius: 0em;
+}
+
+.scroll-bar:horizontal .thumb, .scroll-bar:vertical .thumb {
+    -fx-background-color: black;
+	-fx-background-insets: 0, 0, 0;
+	-fx-background-radius: 0em;
+}
+
+.scroll-bar:horizontal:hover .track, .scroll-bar:horizontal:pressed .track, .scroll-bar:vertical:hover .track, .scroll-bar:vertical:pressed .track{
+     -fx-background-color: green;
+	 -fx-background-radius: 0em;
+}
+
+.scroll-bar .thumb:hover, .scroll-bar .thumb:pressed{
+    -fx-background-color: #181818;
+}
+
+.increment-button:hover, .decrement-button:hover {
+    -fx-background-color: green;
+	-fx-border-color: green;
+}
+
+.split-pane:horizontal > .split-pane-divider {
+   -fx-background-color: green;
+}
+
+.split-pane:vertical > .split-pane-divider {
+   -fx-background-color: green;
+}

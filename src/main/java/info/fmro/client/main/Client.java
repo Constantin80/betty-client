@@ -54,7 +54,6 @@ final class Client {
             }
 
             Generic.disableHTTPSValidation();
-
             VarsIO.readObjectsFromFiles();
 
             if (Statics.programIsRunningMultiThreaded.getAndSet(true)) {
@@ -63,6 +62,7 @@ final class Client {
 
             // threads only get started below this line
             new Thread(() -> Application.launch(GUI.class)).start(); // this needs to start before the sslClientThread
+//            GUI.hasStarted.await();
 
             final MaintenanceThread maintenanceThread = new MaintenanceThread();
             maintenanceThread.start();

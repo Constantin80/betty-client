@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.Timer;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -46,6 +47,7 @@ public final class Statics {
     public static final ClientStreamSynchronizedMap<String, MarketCatalogue> marketCataloguesMap = new ClientStreamSynchronizedMap<>(MarketCatalogue.class, 128); // <marketId, MarketCatalogue>
     public static final ClientStreamSynchronizedMap<String, Event> eventsMap = new ClientStreamSynchronizedMap<>(Event.class, 128); // <eventId, Event>
     public static final Timer timer = new Timer();
+    public static final Set<String> unsupportedEventNames = Set.of("Set 01", "Set 02", "Set 03", "Set 04", "Set 05");
 
     private Statics() {
     }
