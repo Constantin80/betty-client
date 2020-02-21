@@ -1,5 +1,6 @@
 package info.fmro.client.threads;
 
+import info.fmro.client.main.GUI;
 import info.fmro.client.objects.Statics;
 import info.fmro.shared.entities.Event;
 import info.fmro.shared.entities.MarketCatalogue;
@@ -21,6 +22,7 @@ import info.fmro.shared.stream.objects.SerializableObjectModification;
 import info.fmro.shared.stream.objects.StreamObjectInterface;
 import info.fmro.shared.stream.objects.StreamSynchronizedMap;
 import info.fmro.shared.stream.protocol.ChangeMessageFactory;
+import info.fmro.shared.utility.Formulas;
 import info.fmro.shared.utility.Generic;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -62,34 +64,58 @@ public class SSLClientThread
         if (receivedCommand instanceof RulesManager) {
             @NotNull final RulesManager rulesManager = (RulesManager) receivedCommand;
             Statics.rulesManager.copyFromStream(rulesManager);
+            GUI.publicRefreshDisplayedManagedObject();
         } else if (receivedCommand instanceof ExistingFunds) {
             @NotNull final ExistingFunds existingFunds = (ExistingFunds) receivedCommand;
             Statics.existingFunds.copyFrom(existingFunds);
+            GUI.publicRefreshDisplayedManagedObject();
         } else if (receivedCommand instanceof MarketCache) {
             @NotNull final MarketCache marketCache = (MarketCache) receivedCommand;
             Statics.marketCache.copyFromStream(marketCache);
+            GUI.publicRefreshDisplayedManagedObject();
         } else if (receivedCommand instanceof OrderCache) {
             @NotNull final OrderCache orderCache = (OrderCache) receivedCommand;
             Statics.orderCache.copyFromStream(orderCache);
+            GUI.publicRefreshDisplayedManagedObject();
         } else if (receivedCommand instanceof StreamSynchronizedMap<?, ?>) {
             @NotNull final StreamSynchronizedMap<?, ?> streamSynchronizedMap = (StreamSynchronizedMap<?, ?>) receivedCommand;
             final Class<?> clazz = streamSynchronizedMap.getClazz();
             if (MarketCatalogue.class.equals(clazz)) {
                 @SuppressWarnings("unchecked") @NotNull final StreamSynchronizedMap<String, MarketCatalogue> streamMarketCatalogueMap = (StreamSynchronizedMap<String, MarketCatalogue>) receivedCommand;
                 Statics.marketCataloguesMap.copyFromStream(streamMarketCatalogueMap);
+                GUI.publicRefreshDisplayedManagedObject();
             } else if (Event.class.equals(clazz)) {
                 @SuppressWarnings("unchecked") @NotNull final StreamSynchronizedMap<String, Event> streamEventMap = (StreamSynchronizedMap<String, Event>) receivedCommand;
                 Statics.eventsMap.copyFromStream(streamEventMap);
+                GUI.publicRefreshDisplayedManagedObject();
             } else {
                 logger.error("unknown streamSynchronizedMap class in runAfterReceive for: {} {}", clazz, Generic.objectToString(receivedCommand));
             }
         } else if (receivedCommand instanceof MarketChangeMessage) {
             @NotNull final MarketChangeMessage marketChangeMessage = (MarketChangeMessage) receivedCommand;
             Statics.marketCache.onMarketChange(ChangeMessageFactory.ToChangeMessage(-1, marketChangeMessage), Statics.existingFunds.currencyRate);
+            final HashSet<String> marketIds = marketChangeMessage.getChangedMarketIds();
+            if (marketIds == null) { // normal, nothing to be done
+            } else {
+                for (final String marketId : marketIds) {
+                    final String eventId = Formulas.getEventIdOfMarketId(marketId, Statics.marketCataloguesMap);
+                    GUI.managedMarketUpdated(marketId);
+                    GUI.managedEventUpdated(eventId);
+                }
+            }
         } else if (receivedCommand instanceof OrderChangeMessage) {
             @NotNull final OrderChangeMessage orderChangeMessage = (OrderChangeMessage) receivedCommand;
             Statics.orderCache.onOrderChange(ChangeMessageFactory.ToChangeMessage(-1, orderChangeMessage), Statics.rulesManager.orderCacheHasReset, Statics.rulesManager.newOrderMarketCreated, Statics.pendingOrdersThread,
                                              Statics.existingFunds.currencyRate);
+            final HashSet<String> marketIds = orderChangeMessage.getChangedMarketIds();
+            if (marketIds == null) { // normal, nothing to be done
+            } else {
+                for (final String marketId : marketIds) {
+                    final String eventId = Formulas.getEventIdOfMarketId(marketId, Statics.marketCataloguesMap);
+                    GUI.managedMarketUpdated(marketId);
+                    GUI.managedEventUpdated(eventId);
+                }
+            }
         } else if (receivedCommand instanceof SerializableObjectModification) {
             final SerializableObjectModification<?> serializableObjectModification = (SerializableObjectModification<?>) receivedCommand;
             final Enum<?> command = serializableObjectModification.getCommand();
@@ -103,6 +129,7 @@ public class SSLClientThread
                                 final String eventId = (String) objectsToModify[0];
                                 final ManagedEvent managedEvent = (ManagedEvent) objectsToModify[1];
                                 Statics.rulesManager.addManagedEvent(eventId, managedEvent);
+                                GUI.managedEventUpdated(eventId);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
@@ -128,6 +155,7 @@ public class SSLClientThread
                                 final String marketId = (String) objectsToModify[0];
                                 final ManagedMarket managedMarket = (ManagedMarket) objectsToModify[1];
                                 Statics.rulesManager.addManagedMarket(marketId, managedMarket);
+                                GUI.managedMarketUpdated(marketId);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
@@ -139,7 +167,9 @@ public class SSLClientThread
                         if (objectsToModify != null && objectsToModify.length == 1) {
                             if (objectsToModify[0] instanceof String) {
                                 final String marketId = (String) objectsToModify[0];
+                                final String eventId = Formulas.getEventIdOfMarketId(marketId, Statics.marketCataloguesMap);
                                 Statics.rulesManager.removeManagedMarket(marketId);
+                                GUI.managedEventUpdated(eventId);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
@@ -153,6 +183,7 @@ public class SSLClientThread
                                 final String eventId = (String) objectsToModify[0];
                                 final Double newAmount = (Double) objectsToModify[1];
                                 Statics.rulesManager.setEventAmountLimit(eventId, newAmount, Statics.pendingOrdersThread, Statics.orderCache, Statics.existingFunds, Statics.marketCataloguesMap);
+                                GUI.managedEventUpdated(eventId);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
@@ -164,7 +195,11 @@ public class SSLClientThread
                         if (objectsToModify != null && objectsToModify.length == 1) {
                             if (objectsToModify[0] instanceof ManagedRunner) {
                                 final ManagedRunner managedRunner = (ManagedRunner) objectsToModify[0];
+                                final String marketId = managedRunner.getMarketId();
+                                final String eventId = Formulas.getEventIdOfMarketId(marketId, Statics.marketCataloguesMap);
                                 Statics.rulesManager.addManagedRunner(managedRunner, Statics.marketCataloguesMap, Statics.marketCache, Statics.rulesManager, Statics.eventsMap);
+                                GUI.managedMarketUpdated(marketId);
+                                GUI.managedEventUpdated(eventId);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
@@ -176,8 +211,11 @@ public class SSLClientThread
                         if (objectsToModify != null && objectsToModify.length == 2) {
                             if (objectsToModify[0] instanceof String && objectsToModify[1] instanceof RunnerId) {
                                 final String marketId = (String) objectsToModify[0];
+                                final String eventId = Formulas.getEventIdOfMarketId(marketId, Statics.marketCataloguesMap);
                                 final RunnerId runnerId = (RunnerId) objectsToModify[1];
                                 Statics.rulesManager.removeManagedRunner(marketId, runnerId);
+                                GUI.managedMarketUpdated(marketId);
+                                GUI.managedEventUpdated(eventId);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
@@ -189,8 +227,11 @@ public class SSLClientThread
                         if (objectsToModify != null && objectsToModify.length == 2) {
                             if (objectsToModify[0] instanceof String && objectsToModify[1] instanceof Double) {
                                 final String marketId = (String) objectsToModify[0];
+                                final String eventId = Formulas.getEventIdOfMarketId(marketId, Statics.marketCataloguesMap);
                                 final Double amountLimit = (Double) objectsToModify[1];
                                 Statics.rulesManager.setMarketAmountLimit(marketId, amountLimit);
+                                GUI.managedMarketUpdated(marketId);
+                                GUI.managedEventUpdated(eventId);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
@@ -205,6 +246,9 @@ public class SSLClientThread
                                 final RunnerId runnerId = (RunnerId) objectsToModify[1];
                                 final Double amountLimit = (Double) objectsToModify[2];
                                 Statics.rulesManager.setRunnerBackAmountLimit(marketId, runnerId, amountLimit);
+                                final String eventId = Formulas.getEventIdOfMarketId(marketId, Statics.marketCataloguesMap);
+                                GUI.managedMarketUpdated(marketId);
+                                GUI.managedEventUpdated(eventId);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
@@ -219,6 +263,9 @@ public class SSLClientThread
                                 final RunnerId runnerId = (RunnerId) objectsToModify[1];
                                 final Double amountLimit = (Double) objectsToModify[2];
                                 Statics.rulesManager.setRunnerLayAmountLimit(marketId, runnerId, amountLimit);
+                                final String eventId = Formulas.getEventIdOfMarketId(marketId, Statics.marketCataloguesMap);
+                                GUI.managedMarketUpdated(marketId);
+                                GUI.managedEventUpdated(eventId);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
@@ -233,6 +280,9 @@ public class SSLClientThread
                                 final RunnerId runnerId = (RunnerId) objectsToModify[1];
                                 final Double odds = (Double) objectsToModify[2];
                                 Statics.rulesManager.setRunnerMinBackOdds(marketId, runnerId, odds);
+                                final String eventId = Formulas.getEventIdOfMarketId(marketId, Statics.marketCataloguesMap);
+                                GUI.managedMarketUpdated(marketId);
+                                GUI.managedEventUpdated(eventId);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
@@ -247,6 +297,9 @@ public class SSLClientThread
                                 final RunnerId runnerId = (RunnerId) objectsToModify[1];
                                 final Double odds = (Double) objectsToModify[2];
                                 Statics.rulesManager.setRunnerMaxLayOdds(marketId, runnerId, odds);
+                                final String eventId = Formulas.getEventIdOfMarketId(marketId, Statics.marketCataloguesMap);
+                                GUI.managedMarketUpdated(marketId);
+                                GUI.managedEventUpdated(eventId);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
@@ -260,6 +313,7 @@ public class SSLClientThread
                                 final String marketId = (String) objectsToModify[0];
                                 final String marketName = (String) objectsToModify[1];
                                 Statics.rulesManager.setMarketName(marketId, marketName);
+                                GUI.managedMarketUpdated(marketId);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
@@ -273,6 +327,7 @@ public class SSLClientThread
                                 final String eventId = (String) objectsToModify[0];
                                 final String eventName = (String) objectsToModify[1];
                                 Statics.rulesManager.setEventName(eventId, eventName);
+                                GUI.managedEventUpdated(eventId);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
@@ -292,6 +347,7 @@ public class SSLClientThread
                             if (objectsToModify[0] instanceof Double) {
                                 final Double rate = (Double) objectsToModify[0];
                                 Statics.existingFunds.setCurrencyRate(rate);
+                                GUI.publicRefreshDisplayedManagedObject();
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
@@ -304,6 +360,7 @@ public class SSLClientThread
                             if (objectsToModify[0] instanceof Double) {
                                 final Double reserve = (Double) objectsToModify[0];
                                 Statics.existingFunds.setReserve(reserve);
+                                GUI.publicRefreshDisplayedManagedObject();
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), existingFundsModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
@@ -544,6 +601,7 @@ public class SSLClientThread
                             default:
                                 logger.error("unsupported synchronizedMapModificationCommand in runAfterReceive: {} {}", synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
                         } // end switch
+                        GUI.publicRefreshDisplayedManagedObject();
                     }
                 }
             } else {

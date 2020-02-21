@@ -10,6 +10,12 @@ import info.fmro.shared.javafx.FilterableTreeItem;
 import info.fmro.shared.javafx.TreeItemPredicate;
 import info.fmro.shared.logic.ManagedEvent;
 import info.fmro.shared.logic.ManagedMarket;
+import info.fmro.shared.logic.ManagedRunner;
+import info.fmro.shared.stream.cache.market.Market;
+import info.fmro.shared.stream.cache.market.MarketRunner;
+import info.fmro.shared.stream.cache.order.OrderMarketRunner;
+import info.fmro.shared.stream.definitions.MarketDefinition;
+import info.fmro.shared.stream.objects.RunnerId;
 import info.fmro.shared.stream.objects.SerializableObjectModification;
 import info.fmro.shared.utility.Formulas;
 import info.fmro.shared.utility.Generic;
@@ -46,12 +52,14 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TimerTask;
+import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 
 @SuppressWarnings({"ClassWithTooManyMethods", "OverlyComplexClass"})
@@ -73,7 +81,11 @@ public class GUI
     private static final TreeView<String> rightTreeView = createTreeView(rightEventTreeRoot);
     private static final VBox rightVBox = new VBox(rightTreeView);
     private static final TextField filterTextField = new TextField();
+    private static final GridPane mainGridPane = new GridPane();
     private static boolean rightPanelVisible;
+    @Nullable
+    @SuppressWarnings("RedundantFieldInitialization")
+    private static TreeItem<String> currentlyShownManagedObject = null;
 //    public static final CountDownLatch hasStarted = new CountDownLatch(1);
 
     static {
@@ -94,6 +106,18 @@ public class GUI
 
     @Override
     public void init() {
+    }
+
+    public static void publicRefreshDisplayedManagedObject() {
+        Platform.runLater(GUI::refreshDisplayedManagedObject);
+    }
+
+    public static void managedMarketUpdated(final String marketId) {
+        Platform.runLater(() -> updateCurrentManagedMarket(marketId));
+    }
+
+    public static void managedEventUpdated(final String eventId) {
+        Platform.runLater(() -> updateCurrentManagedEvent(eventId));
     }
 
     public static void updateTotalFundsLabel(final double funds) {
@@ -585,12 +609,13 @@ public class GUI
         leftEventRootChildrenList.remove(eventTreeItem);
         managedEventsTreeItemMap.remove(eventId);
         if (toBeReAddedMarketIds != null) {
-            logger.warn("{} managedMarkets reAdded after managedEvent removal for: {} {} {}", toBeReAddedMarketIds.size(), eventId, Generic.objectToString(toBeReAddedMarketIds), Generic.objectToString(marketIds));
+            logger.info("{} managedMarkets reAdded after managedEvent removal for: {} {} {}", toBeReAddedMarketIds.size(), eventId, Generic.objectToString(toBeReAddedMarketIds), Generic.objectToString(marketIds));
             for (final String marketId : toBeReAddedMarketIds) {
                 addManagedMarket(marketId);
             }
         } else { // this is the normal case, nothing to be reAdded
         }
+        clearMainGridPaneIfDisplaysTreeItem(eventTreeItem);
     }
 
     @SuppressWarnings("UnusedReturnValue")
@@ -658,6 +683,10 @@ public class GUI
 //                removed = false;
 //            }
 //        }
+        if (removed) {
+            clearMainGridPaneIfDisplaysTreeItem(marketTreeItem);
+        } else { // nothing was removed, no need to clear the gridPane
+        }
         return removed;
     }
 
@@ -669,6 +698,7 @@ public class GUI
 
         managedEventsTreeItemMap.clear();
         managedMarketsTreeItemMap.clear();
+        clearMainGridPane();
     }
 
     private static void clearMarketsRightTreeView() {
@@ -1155,7 +1185,6 @@ public class GUI
     private static int treeItemCompare(@NotNull final TreeItem<String> first, @NotNull final TreeItem<String> second) {
         final int result;
         final String firstString = first.getValue(), secondString = second.getValue();
-
         if (Objects.equals(firstString, secondString)) {
             result = 0;
         } else if (firstString == null) {
@@ -1173,7 +1202,6 @@ public class GUI
         } else {
             result = firstString.compareToIgnoreCase(secondString);
         }
-
         return result;
     }
 
@@ -1189,6 +1217,172 @@ public class GUI
 //
 //        return result;
 //    }
+    private static void refreshDisplayedManagedObject() {
+        if (currentlyShownManagedObject == null) { // no event displayed, nothing to be done
+        } else {
+            final String marketId = managedMarketsTreeItemMap.getKey(currentlyShownManagedObject);
+            if (marketId == null) {
+                final String eventId = managedEventsTreeItemMap.getKey(currentlyShownManagedObject);
+                showManagedEvent(eventId, currentlyShownManagedObject);
+            } else {
+                showManagedMarket(marketId, currentlyShownManagedObject);
+            }
+        }
+    }
+
+    private static void clearMainGridPaneIfDisplaysTreeItem(final TreeItem<String> treeItem) {
+        if (currentlyShownManagedObject != null && Objects.equals(treeItem, currentlyShownManagedObject)) {
+            clearMainGridPane();
+        } else { // not the treeItem I'm looking for, nothing to be done
+        }
+    }
+
+    private static void clearMainGridPane() {
+        mainGridPane.getChildren().clear();
+        currentlyShownManagedObject = null;
+    }
+
+    private static void updateCurrentManagedEvent(final String eventId) {
+        final TreeItem<String> updatedEvent = managedEventsTreeItemMap.get(eventId);
+        if (currentlyShownManagedObject != null && Objects.equals(updatedEvent, currentlyShownManagedObject)) {
+            showManagedEvent(eventId, currentlyShownManagedObject);
+        } else { // the updated event is not the same with the one currently displayed, or nothing is being displayed, nothing to be done
+        }
+    }
+
+//    private static void showManagedEvent(final TreeItem<String> currentEvent) {
+//        final String eventId = managedEventsTreeItemMap.getKey(currentEvent);
+//        showManagedEvent(eventId, currentEvent);
+//    }
+
+    private static void showManagedEvent(final String eventId, final TreeItem<String> currentEvent) {
+        currentlyShownManagedObject = currentEvent;
+        mainGridPane.getChildren().clear();
+        // eventName(ManagedEvent or newValue), amountLimit/simpleAmountLimit(ManagedEvent), nManagedMarkets(ManagedEvent or nChildren of TreeItem), nTotalMarkets(Event), "open for" timer, starting at "open date"(Event)
+        final ManagedEvent managedEvent = Statics.rulesManager.events.get(eventId);
+        if (managedEvent == null) {
+            logger.error("null managedEvent in left listener for: {} {}", currentEvent, eventId);
+        } else {
+            final Event event = Statics.eventsMap.get(eventId);
+            final String eventName = currentEvent.getValue();
+            final double simpleAmountLimit = managedEvent.getSimpleAmountLimit();
+            final double calculatedAmountLimit = managedEvent.getAmountLimit(Statics.existingFunds);
+            final int nManagedMarkets = currentEvent.getChildren().size();
+            final int nTotalMarkets = event == null ? -1 : event.getMarketCount();
+            final Date eventOpenTime = event == null ? null : event.getOpenDate();
+
+            final Label eventNameLabel = new Label(eventName);
+            final TextField simpleAmountLimitNode = new TextField(String.valueOf(simpleAmountLimit));
+            final Label calculatedAmountLimitLabel = new Label(String.valueOf(calculatedAmountLimit));
+            final Label nManagedMarketsLabel = new Label(String.valueOf(nManagedMarkets));
+            final Label nTotalMarketsLabel = new Label(String.valueOf(nTotalMarkets));
+            final Label eventOpenTimeLabel = new Label(eventOpenTime == null ? null : eventOpenTime.toString());
+
+            mainGridPane.getChildren().addAll(eventNameLabel, simpleAmountLimitNode, calculatedAmountLimitLabel, nManagedMarketsLabel, nTotalMarketsLabel, eventOpenTimeLabel);
+        }
+    }
+
+    private static void updateCurrentManagedMarket(final String marketId) {
+        final TreeItem<String> updatedMarket = managedMarketsTreeItemMap.get(marketId);
+        if (currentlyShownManagedObject != null && Objects.equals(updatedMarket, currentlyShownManagedObject)) {
+            showManagedMarket(marketId, currentlyShownManagedObject);
+        } else { // the updated market is not the same with the one currently displayed, or nothing is being displayed, nothing to be done
+        }
+    }
+
+//    private static void showManagedMarket(final TreeItem<String> currentMarket) {
+//        final String marketId = managedMarketsTreeItemMap.getKey(currentMarket);
+//        showManagedMarket(marketId, currentMarket);
+//    }
+
+    @SuppressWarnings("OverlyComplexMethod")
+    private static void showManagedMarket(final String marketId, final TreeItem<String> currentMarket) {
+        currentlyShownManagedObject = currentMarket;
+        // marketName(ManagedMarket or newValue), eventName(parentEvent.value), getSimpleAmountLimit/getMaxMarketLimit(ManagedMarket), total value traded(Market), countDown until marketTime(MarketDefinition)
+        // "open for" timer, starting at "open date"(MarketDefinition)
+        // nTotalRunners(Market), nTotalActiveRunners(Market/MarketRunner/RunnerDefinition/RunnerStatus), nManagedRunners(ManagedMarket)
+        // runners(ManagedMarket+Market for non managed): runnerName(MarketCatalogue/RunnerCatalogue), BackAmountLimit(ManagedRunner), LayAmountLimit(ManagedRunner), MinBackOdds(ManagedRunner), MaxLayOdds(ManagedRunner)
+        // calculated from OrderMarketRunner for all runners, but should be 0 for non managed ones: matchedBackExposure, matchedLayExposure, totalBackExposure, totalLayExposure
+        // total value traded(MarketRunner), last trade price(MarketRunner)
+        // for all runners, taken from MarketRunner for general unmatched amounts and from OrderMarketRunner/Order for my unmatched amounts: list of 10 values on each side with price/size
+        // (MarketRunner): list of 10 values on each side with price/size for traded amounts --> maybe not, occupies too much space and is not a priority, can be added later
+        final ManagedMarket managedMarket = Statics.rulesManager.markets.get(marketId);
+        if (managedMarket == null) {
+            logger.error("null managedMarket in left listener for: {} {}", currentMarket, marketId);
+        } else {
+            final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
+            final Market cachedMarket = Statics.marketCache.getMarket(marketId);
+            final MarketDefinition marketDefinition = cachedMarket == null ? null : cachedMarket.getMarketDefinition();
+            final String marketName = currentMarket.getValue();
+            final TreeItem<String> parentItem = currentMarket.getParent();
+            final String eventName = parentItem == null ? null : parentItem.getValue();
+            final double simpleAmountLimit = managedMarket.getSimpleAmountLimit();
+            final double calculatedAmountLimit = managedMarket.getMaxMarketLimit(Statics.existingFunds, Statics.marketCataloguesMap);
+            final double marketTotalValueTraded = cachedMarket == null ? -1d : cachedMarket.getTvEUR(Statics.existingFunds.currencyRate);
+            final Date marketLiveTime = marketDefinition == null ? null : marketDefinition.getMarketTime();
+            final Date marketOpenTime = marketDefinition == null ? null : marketDefinition.getOpenDate();
+            final int nTotalRunners = cachedMarket == null ? -1 : cachedMarket.getNRunners();
+            final int nActiveRunners = cachedMarket == null ? -1 : cachedMarket.getNActiveRunners();
+            final int nManagedRunners = managedMarket.getNRunners();
+            @NotNull final HashMap<RunnerId, ManagedRunner> managedRunners = managedMarket.getRunners();
+            final HashMap<RunnerId, MarketRunner> allRunners = cachedMarket == null ? null : cachedMarket.getMarketRunners();
+            for (@NotNull final Map.Entry<RunnerId, ManagedRunner> entry : managedRunners.entrySet()) {
+                final RunnerId runnerId = entry.getKey();
+                final ManagedRunner managedRunner = entry.getValue();
+                final MarketRunner marketRunner = allRunners == null ? null : allRunners.get(runnerId);
+                final String runnerName = marketCatalogue == null ? null : marketCatalogue.getRunnerName(runnerId);
+                final double backAmountLimit = managedRunner == null ? -1d : managedRunner.getBackAmountLimit();
+                final double layAmountLimit = managedRunner == null ? -1d : managedRunner.getLayAmountLimit();
+                final double minBackOdds = managedRunner == null ? -1d : managedRunner.getMinBackOdds();
+                final double maxLayOdds = managedRunner == null ? -1d : managedRunner.getMaxLayOdds();
+                final OrderMarketRunner orderMarketRunner = Statics.orderCache.getOrderMarketRunner(marketId, runnerId);
+                if (orderMarketRunner == null) { // no orderMarketRunner present, which means no orders placed on this runner, normal behavior
+                } else {
+                    orderMarketRunner.getExposure(managedRunner, Statics.pendingOrdersThread);
+                }
+                final double matchedBackExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getMatchedBackExposure();
+                final double matchedLayExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getMatchedLayExposure();
+                final double totalBackExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getTotalBackExposure();
+                final double totalLayExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getTotalLayExposure();
+                final double runnerTotalValueTraded = marketRunner == null ? 0d : marketRunner.getTvEUR(Statics.existingFunds.currencyRate);
+                final double lastTradedPrice = marketRunner == null ? 0d : marketRunner.getLtp();
+                final TreeMap<Double, Double> myUnmatchedLay = orderMarketRunner == null ? null : orderMarketRunner.getUnmatchedLayAmounts();
+                final TreeMap<Double, Double> myUnmatchedBack = orderMarketRunner == null ? null : orderMarketRunner.getUnmatchedBackAmounts();
+
+            }
+            if (allRunners == null) { // no marketRunners list present, nothing to be done
+            } else {
+                for (@NotNull final Map.Entry<RunnerId, MarketRunner> entry : allRunners.entrySet()) {
+                    final RunnerId runnerId = entry.getKey();
+                    if (managedRunners.containsKey(runnerId)) { // I already parsed this in the previous for loop, nothing to be done here
+                    } else { // non managed runner
+                        final MarketRunner marketRunner = entry.getValue();
+                        final String runnerName = marketCatalogue == null ? null : marketCatalogue.getRunnerName(runnerId);
+                        final double backAmountLimit = -1d;
+                        final double layAmountLimit = -1d;
+                        final double minBackOdds = -1d;
+                        final double maxLayOdds = -1d;
+                        final OrderMarketRunner orderMarketRunner = Statics.orderCache.getOrderMarketRunner(marketId, runnerId);
+                        if (orderMarketRunner == null) { // no orderMarketRunner present, which means no orders placed on this runner, normal behavior
+                        } else {
+                            orderMarketRunner.getExposure(null, Statics.pendingOrdersThread); // calculate the exposure
+                        }
+                        final double matchedBackExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getMatchedBackExposure();
+                        final double matchedLayExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getMatchedLayExposure();
+                        final double totalBackExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getTotalBackExposure();
+                        final double totalLayExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getTotalLayExposure();
+                        final double runnerTotalValueTraded = marketRunner == null ? 0d : marketRunner.getTvEUR(Statics.existingFunds.currencyRate);
+                        final double lastTradedPrice = marketRunner == null ? 0d : marketRunner.getLtp();
+                        final TreeMap<Double, Double> availableToLay = marketRunner == null ? null : marketRunner.getAvailableToLay(Statics.existingFunds.currencyRate);
+                        final TreeMap<Double, Double> availableToBack = marketRunner == null ? null : marketRunner.getAvailableToBack(Statics.existingFunds.currencyRate);
+                        final TreeMap<Double, Double> myUnmatchedLay = orderMarketRunner == null ? null : orderMarketRunner.getUnmatchedLayAmounts();
+                        final TreeMap<Double, Double> myUnmatchedBack = orderMarketRunner == null ? null : orderMarketRunner.getUnmatchedBackAmounts();
+
+                    }
+                } // end for
+            }
+        }
+    }
 
     @SuppressWarnings("OverlyLongMethod")
     @Override
@@ -1223,8 +1417,7 @@ public class GUI
         rootNodesList.addAll(topBar, mainSplitPane);
         @NotNull final TreeView<String> leftTreeView = createTreeView(leftEventTreeRoot);
         final VBox leftVBox = new VBox(leftTreeView);
-        final GridPane gridPane = new GridPane();
-        mainSplitPaneNodesList.addAll(leftVBox, gridPane);
+        mainSplitPaneNodesList.addAll(leftVBox, mainGridPane);
 
         // totalFunds € {} available € {} reserve € {} exposure € {}
         final Label fixedTotalFundsLabel = new Label("Total Funds "), fixedAvailableLabel = new Label(" Available "), fixedReserveLabel = new Label(" out of which safety reserve "), fixedExposureLabel = new Label(" Exposure ");
@@ -1285,18 +1478,19 @@ public class GUI
 
         topBarNodesList.addAll(fixedTotalFundsLabel, totalFundsLabel, fixedAvailableLabel, availableLabel, fixedReserveLabel, reserveLabel, fixedExposureLabel, exposureLabel, hugeSpacer, rightPaneButton);
 
-        rightTreeView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
-            if (newValue == null) { // rare, but does seem to happen
-                logger.error("null newValue in rightTreeView addListener, oldValue: {}", oldValue);
+        rightTreeView.setOnMouseClicked(ae -> {
+            @NotNull final TreeItem<String> selectedItem = rightTreeView.getSelectionModel().getSelectedItem();
+            if (selectedItem == null) {
+                logger.info("likely not clicked on a tree member, null selectedItem in rightTreeView setOnMouseClicked");
             } else {
-                newValue.setExpanded(true);
-                final String eventId = eventsTreeItemMap.getKey(newValue);
+                selectedItem.setExpanded(true);
+                final String eventId = eventsTreeItemMap.getKey(selectedItem);
                 if (eventId == null) {
-                    final String marketId = marketsTreeItemMap.getKey(newValue);
+                    final String marketId = marketsTreeItemMap.getKey(selectedItem);
                     if (marketId == null) {
-                        if (Objects.equals(newValue.getValue(), DEFAULT_EVENT_NAME)) { // I have clicked the default event, normal behavior, nothing to be done
+                        if (Objects.equals(selectedItem.getValue(), DEFAULT_EVENT_NAME)) { // I have clicked the default event, normal behavior, nothing to be done
                         } else {
-                            logger.error("null eventId and marketId in selected treeItem: {}", Generic.objectToString(newValue));
+                            logger.error("null eventId and marketId in selected right treeItem: {}", selectedItem);
                         }
                     } else {
                         Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(SynchronizedMapModificationCommand.getMarkets, MarketCatalogue.class, marketId)); // send command to refresh market
@@ -1304,13 +1498,44 @@ public class GUI
                 } else {
                     final Event event = Statics.eventsMap.get(eventId);
                     if (event == null) {
-                        logger.error("null event for eventId {} in selected treeItem: {}", eventId, Generic.objectToString(newValue));
+                        logger.error("null event for eventId {} in selected right treeItem: {}", eventId, selectedItem);
                     } else {
                         Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(SynchronizedMapModificationCommand.getMarkets, Event.class, event)); // send command to get markets for the selected event
                     }
                 }
             }
+
+
+            ae.consume();
         });
+
+
+//        rightTreeView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+//            if (newValue == null) {
+//                logger.info("likely not clicked on a tree member, null newValue in rightTreeView addListener, oldValue: {}", oldValue);
+//            } else {
+//                newValue.setExpanded(true);
+//                final String eventId = eventsTreeItemMap.getKey(newValue);
+//                if (eventId == null) {
+//                    final String marketId = marketsTreeItemMap.getKey(newValue);
+//                    if (marketId == null) {
+//                        if (Objects.equals(newValue.getValue(), DEFAULT_EVENT_NAME)) { // I have clicked the default event, normal behavior, nothing to be done
+//                        } else {
+//                            logger.error("null eventId and marketId in selected right treeItem: {}", newValue);
+//                        }
+//                    } else {
+//                        Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(SynchronizedMapModificationCommand.getMarkets, MarketCatalogue.class, marketId)); // send command to refresh market
+//                    }
+//                } else {
+//                    final Event event = Statics.eventsMap.get(eventId);
+//                    if (event == null) {
+//                        logger.error("null event for eventId {} in selected right treeItem: {}", eventId, newValue);
+//                    } else {
+//                        Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(SynchronizedMapModificationCommand.getMarkets, Event.class, event)); // send command to get markets for the selected event
+//                    }
+//                }
+//            }
+//        });
 
         final MenuItem entryRight1 = new MenuItem("Add Managed Object");
         entryRight1.setOnAction(ae -> {
@@ -1320,7 +1545,10 @@ public class GUI
             if (marketId == null) {
                 final String eventId = eventsTreeItemMap.getKey(treeItem);
                 if (eventId == null) {
-                    logger.error("null marketId and eventId in entryRight for: {} {} {}", Objects.equals(parentNode, rightEventTreeRoot), treeItem, parentNode);
+                    if (Objects.equals(treeItem.getValue(), DEFAULT_EVENT_NAME)) { // I have clicked the default event, normal behavior, nothing to be done
+                    } else {
+                        logger.error("null marketId and eventId in entryRight for: {} {} {}", Objects.equals(parentNode, rightEventTreeRoot), treeItem, parentNode);
+                    }
                 } else {
                     Statics.threadPoolExecutor.submit(() -> Utils.createManagedEvent(eventId));
                 }
@@ -1334,6 +1562,7 @@ public class GUI
                 }
                 Statics.threadPoolExecutor.submit(() -> Utils.createManagedMarket(marketId, eventId));
             }
+            ae.consume();
         });
         final ContextMenu rightContextMenu = new ContextMenu(entryRight1);
         rightContextMenu.setOnShowing(ae -> {
@@ -1346,6 +1575,7 @@ public class GUI
                 logger.error("treeItem not contained in markets nor events maps in rightContextMenu: {} {}", treeItem, treeItem == null ? null : treeItem.getParent());
                 entryRight1.setText("Add Managed Object");
             }
+            ae.consume();
         });
         rightTreeView.setContextMenu(rightContextMenu);
 
@@ -1357,13 +1587,17 @@ public class GUI
             if (marketId == null) {
                 final String eventId = managedEventsTreeItemMap.getKey(treeItem);
                 if (eventId == null) {
-                    logger.error("null marketId and eventId in entryLeft for: {} {} {}", Objects.equals(parentNode, leftEventTreeRoot), treeItem, parentNode);
+                    if (Objects.equals(treeItem.getValue(), DEFAULT_EVENT_NAME)) { // I have clicked the default event, normal behavior, nothing to be done
+                    } else {
+                        logger.error("null marketId and eventId in entryLeft for: {} {} {}", Objects.equals(parentNode, leftEventTreeRoot), treeItem, parentNode);
+                    }
                 } else {
                     Statics.threadPoolExecutor.submit(() -> Utils.removeManagedEvent(eventId));
                 }
             } else {
                 Statics.threadPoolExecutor.submit(() -> Utils.removeManagedMarket(marketId));
             }
+            ae.consume();
         });
         final ContextMenu leftContextMenu = new ContextMenu(entryLeft1);
         leftContextMenu.setOnShowing(ae -> {
@@ -1376,8 +1610,31 @@ public class GUI
                 logger.error("treeItem not contained in markets nor events maps in leftContextMenu: {} {}", treeItem, treeItem == null ? null : treeItem.getParent());
                 entryLeft1.setText("Remove Managed Object");
             }
+            ae.consume();
         });
         leftTreeView.setContextMenu(leftContextMenu);
+
+        leftTreeView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue == null) {
+                logger.info("likely not clicked on a tree member, null newValue in leftTreeView addListener, oldValue: {}", oldValue);
+            } else {
+                newValue.setExpanded(true);
+                final String eventId = managedEventsTreeItemMap.getKey(newValue);
+                if (eventId == null) {
+                    final String marketId = managedMarketsTreeItemMap.getKey(newValue);
+                    if (marketId == null) {
+                        if (Objects.equals(newValue.getValue(), DEFAULT_EVENT_NAME)) { // I have clicked the default event, normal behavior, nothing to be done
+                        } else {
+                            logger.error("null eventId and marketId in selected left treeItem: {}", newValue);
+                        }
+                    } else { // managedMarket
+                        showManagedMarket(marketId, newValue);
+                    }
+                } else { // managedEvent
+                    showManagedEvent(eventId, newValue);
+                }
+            }
+        });
 
         primaryStage.show();
 
