@@ -182,7 +182,7 @@ public class SSLClientThread
                             if (objectsToModify[0] instanceof String && objectsToModify[1] instanceof Double) {
                                 final String eventId = (String) objectsToModify[0];
                                 final Double newAmount = (Double) objectsToModify[1];
-                                Statics.rulesManager.setEventAmountLimit(eventId, newAmount, Statics.pendingOrdersThread, Statics.orderCache, Statics.existingFunds, Statics.marketCataloguesMap);
+                                Statics.rulesManager.setEventAmountLimit(eventId, newAmount, Statics.pendingOrdersThread, Statics.orderCache, Statics.existingFunds, Statics.marketCataloguesMap, Statics.marketCache);
                                 GUI.managedEventUpdated(eventId);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
@@ -197,7 +197,7 @@ public class SSLClientThread
                                 final ManagedRunner managedRunner = (ManagedRunner) objectsToModify[0];
                                 final String marketId = managedRunner.getMarketId();
                                 final String eventId = Formulas.getEventIdOfMarketId(marketId, Statics.marketCataloguesMap);
-                                Statics.rulesManager.addManagedRunner(managedRunner, Statics.marketCataloguesMap, Statics.marketCache, Statics.rulesManager, Statics.eventsMap);
+                                Statics.rulesManager.addManagedRunner(managedRunner, Statics.marketCataloguesMap, Statics.marketCache, Statics.eventsMap);
                                 GUI.managedMarketUpdated(marketId);
                                 GUI.managedEventUpdated(eventId);
                             } else {

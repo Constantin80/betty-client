@@ -10,15 +10,31 @@ import info.fmro.shared.logic.ManagedMarket;
 import info.fmro.shared.stream.cache.market.Market;
 import info.fmro.shared.stream.definitions.MarketDefinition;
 import info.fmro.shared.stream.objects.SerializableObjectModification;
+import info.fmro.shared.utility.Formulas;
+import info.fmro.shared.utility.Generic;
+import javafx.collections.ObservableList;
+import javafx.geometry.Pos;
+import javafx.scene.Node;
+import javafx.scene.control.Label;
+import javafx.scene.control.TextField;
+import javafx.scene.control.TextFormatter;
+import javafx.scene.input.KeyCode;
+import javafx.scene.layout.GridPane;
+import javafx.scene.text.TextAlignment;
+import javafx.util.StringConverter;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.UnaryOperator;
+import java.util.regex.Pattern;
 
 @SuppressWarnings({"UtilityClass", "unused"})
 final class GUIUtils {
@@ -38,7 +54,7 @@ final class GUIUtils {
     static String getManagedMarketName(final String marketId, @NotNull final ManagedMarket managedMarket) {
         @Nullable String name = managedMarket.simpleGetMarketName();
         if (name == null) {
-            name = managedMarket.getMarketName(Statics.marketCache, Statics.rulesManager);
+            name = managedMarket.getMarketName(Statics.marketCache, Statics.rulesManager, Statics.marketCataloguesMap);
             if (name == null) {
                 final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
                 if (marketCatalogue != null) {
@@ -54,7 +70,7 @@ final class GUIUtils {
                 }
 
                 if (name == null) {
-                    final Market market = managedMarket.getMarket(Statics.marketCache, Statics.rulesManager);
+                    final Market market = managedMarket.getMarket(Statics.marketCache, Statics.rulesManager, Statics.marketCataloguesMap);
                     if (market != null) {
                         final MarketDefinition marketDefinition = market.getMarketDefinition();
                         if (marketDefinition != null) {
@@ -185,5 +201,133 @@ final class GUIUtils {
     @Contract("_ -> new")
     private static String removeExpiredMarker(@NotNull final String name) {
         return new String(name.substring(MANAGED_EVENT_EXPIRED_MARKER.length()));
+    }
+
+    @SuppressWarnings("FloatingPointEquality")
+    static <T extends Enum<T>> void setOnKeyPressedTextField(@NotNull final TextField textField, final double initialValue, final T command, final Serializable... objects) {
+        textField.setOnKeyPressed(ae -> {
+            if (ae.getCode() == KeyCode.ENTER) {
+                double primitive = -1d;
+                try {
+                    primitive = Double.parseDouble(textField.getText());
+                } catch (NumberFormatException e) {
+                    logger.error("NumberFormatException while parsing textField for: {}", textField.getText(), e);
+                }
+                final double withinRangePrimitive = Generic.keepDoubleWithinRange(primitive);
+                if (withinRangePrimitive == primitive) { // no modification made by withinRange method, nothing to be done
+                } else {
+                    textField.setText(GUI.decimalFormatTextField.format(withinRangePrimitive));
+                }
+
+                if (withinRangePrimitive == initialValue) { // value didn't change, won't send any command
+                } else {
+                    Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(command, Generic.concatArrays(objects, new Serializable[]{withinRangePrimitive})));
+                }
+            } else if (ae.getCode() == KeyCode.ESCAPE) {
+                textField.setText(GUI.decimalFormatTextField.format(Generic.keepDoubleWithinRange(initialValue)));
+            } else { // unsupported key, nothing to be done
+            }
+        });
+        textField.focusedProperty().addListener((observable, oldValue, newValue) -> {
+            if (!newValue) {
+                textField.setText(GUI.decimalFormatTextField.format(Generic.keepDoubleWithinRange(initialValue)));
+            }
+        });
+    }
+
+    static <T extends Enum<T>> void setOnKeyPressedTextFieldOdds(@NotNull final TextField textField, @NotNull final AtomicInteger columnIndex, @NotNull final AtomicInteger rowIndex, final double initialValue, final T command,
+                                                                 final Serializable... objects) {
+        textField.setOnKeyPressed(ae -> {
+            if (ae.getCode() == KeyCode.UP) {
+                final double newValue = Formulas.getNextOddsUp(initialValue);
+                //noinspection FloatingPointEquality
+                if (newValue == initialValue) { // nothing changed
+                    textField.end();
+                } else {
+                    textField.setText(GUI.decimalFormatTextField.format(newValue));
+                    columnIndex.set(GridPane.getColumnIndex(textField));
+                    rowIndex.set(GridPane.getRowIndex(textField));
+                    Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(command, Generic.concatArrays(objects, new Serializable[]{newValue})));
+                }
+            } else if (ae.getCode() == KeyCode.DOWN) {
+                final double newValue = Formulas.getNextOddsDown(initialValue);
+                //noinspection FloatingPointEquality
+                if (newValue == initialValue) { // nothing changed
+                } else {
+                    textField.setText(GUI.decimalFormatTextField.format(newValue));
+                    columnIndex.set(GridPane.getColumnIndex(textField));
+                    rowIndex.set(GridPane.getRowIndex(textField));
+                    Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(command, Generic.concatArrays(objects, new Serializable[]{newValue})));
+                }
+            } else if (ae.getCode() == KeyCode.ESCAPE || ae.getCode() == KeyCode.ENTER) {
+                textField.setText(GUI.decimalFormatTextField.format(Formulas.getClosestOdds(initialValue)));
+            } else { // unsupported key, nothing to be done
+            }
+        });
+        textField.focusedProperty().addListener((observable, oldValue, newValue) -> {
+            if (!newValue) {
+                textField.setText(GUI.decimalFormatTextField.format(Generic.keepDoubleWithinRange(initialValue)));
+            }
+        });
+    }
+
+    static void handleDoubleTextField(@NotNull final TextField textField, final double value) {
+        @SuppressWarnings("RegExpAnonymousGroup") final Pattern validEditingState = Pattern.compile("-?(([1-9][0-9]*)|0)?(\\.[0-9]*)?"); // "-?(([1-9][0-9]*)|0)?(\\.[0-9]*)?"
+
+        final UnaryOperator<TextFormatter.Change> filter = c -> {
+            final String text = c.getControlNewText();
+            return validEditingState.matcher(text).matches() ? c : null;
+        };
+
+        @SuppressWarnings("OverlyComplexAnonymousInnerClass") final StringConverter<String> converter = new StringConverter<>() {
+            @NotNull
+            @Override
+            public String fromString(@SuppressWarnings("QuestionableName") @NotNull final String string) {
+                return string.isEmpty() || "-".equals(string) || ".".equals(string) || "-.".equals(string) ? "0" : string;
+            }
+
+            @Contract(pure = true)
+            @Override
+            public String toString(@NotNull final String object) {
+                return object.toString();
+            }
+        };
+
+        final TextFormatter<String> textFormatter = new TextFormatter<>(converter, GUI.decimalFormatTextField.format(Generic.keepDoubleWithinRange(value)), filter);
+        textField.setTextFormatter(textFormatter);
+    }
+
+    static void setCenterLabel(@NotNull final Label label) {
+        label.setTextAlignment(TextAlignment.CENTER);
+        label.setAlignment(Pos.BASELINE_CENTER);
+        label.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+        GridPane.setFillWidth(label, true);
+        GridPane.setFillHeight(label, true);
+    }
+
+    static Node getNodeByRowColumnIndex(@NotNull final GridPane gridPane, final int column, final int row) {
+        Node result = null;
+        final ObservableList<Node> children = gridPane.getChildren();
+
+        for (final Node node : children) {
+            if (GridPane.getColumnIndex(node) == column && GridPane.getRowIndex(node) == row) {
+                result = node;
+                break;
+            } else { // not the node I look for, nothing to be done
+            }
+        }
+        return result;
+    }
+
+    static String decimalFormat(final double value) {
+        final String returnValue;
+        if (value < 999.995d) {
+            returnValue = GUI.decimalFormatLabelLow.format(value);
+        } else if (value < 9999.95d) {
+            returnValue = GUI.decimalFormatLabelMedium.format(value);
+        } else {
+            returnValue = GUI.decimalFormatLabelHigh.format(value);
+        }
+        return returnValue;
     }
 }

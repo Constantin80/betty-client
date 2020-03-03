@@ -61,11 +61,12 @@
 }
 
 .text-field{
--fx-background-color: black;
+-fx-background-color: green;
 -fx-border-color: green;
 -fx-border-width: 0;
 -fx-font-size: 14;
 -fx-text-fill: white;
+-fx-padding: 0px;
 }
 
 .tree-cell{
@@ -106,6 +107,26 @@
 -fx-border-width: 0;
 -fx-font-size: 16;
 -fx-text-fill: white;
+}
+
+#BackColoredCell{
+-fx-background-color: midnightblue;
+-fx-border-color: white;
+-fx-text-fill: white;
+-fx-border-width: 1;
+}
+
+#LayColoredCell{
+-fx-background-color: firebrick;
+-fx-border-color: white;
+-fx-text-fill: white;
+-fx-border-width: 1;
+}
+
+#NotColoredPriceSizeCell{
+-fx-border-color: white;
+-fx-text-fill: white;
+-fx-border-width: 1;
 }
 
 .scroll-bar:horizontal, .scroll-bar:vertical{

@@ -5,6 +5,7 @@ import info.fmro.client.utility.Utils;
 import info.fmro.shared.entities.Event;
 import info.fmro.shared.entities.MarketCatalogue;
 import info.fmro.shared.entities.MarketDescription;
+import info.fmro.shared.enums.RulesManagerModificationCommand;
 import info.fmro.shared.enums.SynchronizedMapModificationCommand;
 import info.fmro.shared.javafx.FilterableTreeItem;
 import info.fmro.shared.javafx.TreeItemPredicate;
@@ -23,6 +24,7 @@ import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.collections.ObservableList;
+import javafx.geometry.Insets;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.Cursor;
 import javafx.scene.Node;
@@ -50,6 +52,7 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
@@ -61,16 +64,23 @@ import java.util.Set;
 import java.util.TimerTask;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
-@SuppressWarnings({"ClassWithTooManyMethods", "OverlyComplexClass"})
+@SuppressWarnings({"ClassWithTooManyMethods", "OverlyComplexClass", "AccessToNonThreadSafeStaticField"})
 public class GUI
         extends Application {
     private static final Logger logger = LoggerFactory.getLogger(GUI.class);
+    static final DecimalFormat decimalFormatTextField = new DecimalFormat("#.###");
+    static final DecimalFormat decimalFormatLabelLow = new DecimalFormat("#,###.##");
+    static final DecimalFormat decimalFormatLabelMedium = new DecimalFormat("#,###.#");
+    static final DecimalFormat decimalFormatLabelHigh = new DecimalFormat("#,###");
+    public static final int N_PRICE_CELLS = 3;
+    private static final AtomicInteger focusedColumnIndex = new AtomicInteger(-1), focusedRowIndex = new AtomicInteger(-1);
     private static final String DEFAULT_EVENT_NAME = "no event attached", NULL_NAME = "null value";
-    private static final Label totalFundsLabel = new Label("€ " + Generic.addCommas(Statics.existingFunds.getTotalFunds(), 2));
-    private static final Label availableLabel = new Label("€ " + Generic.addCommas(Statics.existingFunds.getAvailableFunds(), 2));
-    private static final Label reserveLabel = new Label("€ " + Generic.addCommas(Statics.existingFunds.getReserve(), 2));
-    private static final Label exposureLabel = new Label("€ " + Generic.addCommas(Statics.existingFunds.getExposure(), 2));
+    private static final Label totalFundsLabel = new Label("€ " + decimalFormatLabelLow.format(Statics.existingFunds.getTotalFunds()));
+    private static final Label availableLabel = new Label("€ " + decimalFormatLabelLow.format(Statics.existingFunds.getAvailableFunds()));
+    private static final Label reserveLabel = new Label("€ " + decimalFormatLabelLow.format(Statics.existingFunds.getReserve()));
+    private static final Label exposureLabel = new Label("€ " + decimalFormatLabelLow.format(Statics.existingFunds.getExposure()));
     private static final SplitPane mainSplitPane = new SplitPane();
     private static final ObservableList<Node> mainSplitPaneNodesList = mainSplitPane.getItems();
     private static final DualHashBidiMap<String, TreeItem<String>> managedEventsTreeItemMap = new DualHashBidiMap<>(), managedMarketsTreeItemMap = new DualHashBidiMap<>();
@@ -82,11 +92,31 @@ public class GUI
     private static final VBox rightVBox = new VBox(rightTreeView);
     private static final TextField filterTextField = new TextField();
     private static final GridPane mainGridPane = new GridPane();
+    //    private static final Pattern NUMERIC_PATTERN = Pattern.compile("\\d*");
+//    private static final Pattern NUMERIC_PATTERN = Pattern.compile("[+-]?\\d*\\.?\\d+"); // [+-]?\\d*\\.?\\d+
+//    private static final Pattern NON_NUMERIC_PATTERN = Pattern.compile("[^\\d]");
     private static boolean rightPanelVisible;
     @Nullable
     @SuppressWarnings("RedundantFieldInitialization")
     private static TreeItem<String> currentlyShownManagedObject = null;
-//    public static final CountDownLatch hasStarted = new CountDownLatch(1);
+    //    public static final CountDownLatch hasStarted = new CountDownLatch(1);
+    private static final Label eventNamePreLabel = new Label("ManagedEvent:");
+    private static final Label eventIdPreLabel = new Label("Event Id:");
+    private static final Label simpleAmountLimitLabel = new Label("Set Amount Limit:");
+    private static final Label calculatedAmountLimitPreLabel = new Label("Calculated Limit:");
+    private static final Label nManagedMarketsPreLabel = new Label("nManagedMarkets:");
+    private static final Label nTotalMarketsPreLabel = new Label("nTotalMarkets:");
+    private static final Label eventOpenTimePreLabel = new Label("Event Open Date:");
+    private static final Label marketNamePreLabel = new Label("ManagedMarket:");
+    private static final Label marketIdPreLabel = new Label("Market Id:");
+    private static final Label marketTotalValueTradedPreLabel = new Label("Value Traded:");
+    private static final Label marketLiveTimePreLabel = new Label("Market Live Date:");
+    private static final Label marketOpenTimePreLabel = new Label("Market Open Date:");
+    private static final Label nTotalRunnersPreLabel = new Label("nTotalRunners:");
+    private static final Label nActiveRunnersPreLabel = new Label("nActiveRunners:");
+    private static final Label nManagedRunnersPreLabel = new Label("nManagedRunners:");
+    private static final Label unmatchedBackPreLabel = new Label("Unmatched Back:");
+    private static final Label unmatchedLayPreLabel = new Label("Unmatched Lay:");
 
     static {
         totalFundsLabel.setId("ImportantText");
@@ -97,6 +127,7 @@ public class GUI
         reserveLabel.setMinWidth(200);
         exposureLabel.setId("ImportantText");
         exposureLabel.setMinWidth(200);
+        mainSplitPane.setDividerPositions(.0, .83);
     }
 
     @Override
@@ -121,19 +152,19 @@ public class GUI
     }
 
     public static void updateTotalFundsLabel(final double funds) {
-        Platform.runLater(() -> totalFundsLabel.setText("€ " + Generic.addCommas(funds, 2)));
+        Platform.runLater(() -> totalFundsLabel.setText("€ " + decimalFormatLabelLow.format(funds)));
     }
 
     public static void updateAvailableLabel(final double funds) {
-        Platform.runLater(() -> availableLabel.setText("€ " + Generic.addCommas(funds, 2)));
+        Platform.runLater(() -> availableLabel.setText("€ " + decimalFormatLabelLow.format(funds)));
     }
 
     public static void updateReserveLabel(final double funds) {
-        Platform.runLater(() -> reserveLabel.setText("€ " + Generic.addCommas(funds, 2)));
+        Platform.runLater(() -> reserveLabel.setText("€ " + decimalFormatLabelLow.format(funds)));
     }
 
     public static void updateExposureLabel(final double funds) {
-        Platform.runLater(() -> exposureLabel.setText("€ " + Generic.addCommas(funds, 2)));
+        Platform.runLater(() -> exposureLabel.setText("€ " + decimalFormatLabelLow.format(funds)));
     }
 
     @SuppressWarnings("WeakerAccess")
@@ -1255,6 +1286,7 @@ public class GUI
 //        showManagedEvent(eventId, currentEvent);
 //    }
 
+    @SuppressWarnings("ValueOfIncrementOrDecrementUsed")
     private static void showManagedEvent(final String eventId, final TreeItem<String> currentEvent) {
         currentlyShownManagedObject = currentEvent;
         mainGridPane.getChildren().clear();
@@ -1272,13 +1304,31 @@ public class GUI
             final Date eventOpenTime = event == null ? null : event.getOpenDate();
 
             final Label eventNameLabel = new Label(eventName);
-            final TextField simpleAmountLimitNode = new TextField(String.valueOf(simpleAmountLimit));
-            final Label calculatedAmountLimitLabel = new Label(String.valueOf(calculatedAmountLimit));
+            final Label eventIdLabel = new Label(eventId);
+            final TextField simpleAmountLimitNode = new TextField(decimalFormatTextField.format(Generic.keepDoubleWithinRange(simpleAmountLimit)));
+            final Label calculatedAmountLimitLabel = new Label(decimalFormatLabelLow.format(calculatedAmountLimit));
             final Label nManagedMarketsLabel = new Label(String.valueOf(nManagedMarkets));
             final Label nTotalMarketsLabel = new Label(String.valueOf(nTotalMarkets));
             final Label eventOpenTimeLabel = new Label(eventOpenTime == null ? null : eventOpenTime.toString());
 
-            mainGridPane.getChildren().addAll(eventNameLabel, simpleAmountLimitNode, calculatedAmountLimitLabel, nManagedMarketsLabel, nTotalMarketsLabel, eventOpenTimeLabel);
+            GUIUtils.setOnKeyPressedTextField(simpleAmountLimitNode, simpleAmountLimit, RulesManagerModificationCommand.setEventAmountLimit, eventId);
+            GUIUtils.handleDoubleTextField(simpleAmountLimitNode, simpleAmountLimit);
+
+            int rowIndex = 0;
+            mainGridPane.add(eventNamePreLabel, 0, rowIndex);
+            mainGridPane.add(eventNameLabel, 1, rowIndex++);
+            mainGridPane.add(eventIdPreLabel, 0, rowIndex);
+            mainGridPane.add(eventIdLabel, 1, rowIndex++);
+            mainGridPane.add(simpleAmountLimitLabel, 0, rowIndex);
+            mainGridPane.add(simpleAmountLimitNode, 1, rowIndex++);
+            mainGridPane.add(calculatedAmountLimitPreLabel, 0, rowIndex);
+            mainGridPane.add(calculatedAmountLimitLabel, 1, rowIndex++);
+            mainGridPane.add(nManagedMarketsPreLabel, 0, rowIndex);
+            mainGridPane.add(nManagedMarketsLabel, 1, rowIndex++);
+            mainGridPane.add(nTotalMarketsPreLabel, 0, rowIndex);
+            mainGridPane.add(nTotalMarketsLabel, 1, rowIndex++);
+            mainGridPane.add(eventOpenTimePreLabel, 0, rowIndex);
+            mainGridPane.add(eventOpenTimeLabel, 1, rowIndex);
         }
     }
 
@@ -1295,9 +1345,156 @@ public class GUI
 //        showManagedMarket(marketId, currentMarket);
 //    }
 
-    @SuppressWarnings("OverlyComplexMethod")
+    @SuppressWarnings({"ValueOfIncrementOrDecrementUsed", "OverlyLongMethod", "OverlyComplexMethod"})
+    private static int showRunner(final String marketId, final RunnerId runnerId, final ManagedRunner managedRunner, final MarketRunner marketRunner, final MarketCatalogue marketCatalogue, final int previousLinesRowIndex, final int runnerRowIndex) {
+        final String runnerName = marketCatalogue == null ? null : marketCatalogue.getRunnerName(runnerId);
+        final double backAmountLimit = managedRunner == null ? -1d : managedRunner.getBackAmountLimit();
+        final double layAmountLimit = managedRunner == null ? -1d : managedRunner.getLayAmountLimit();
+        final double minBackOdds = managedRunner == null ? -1d : managedRunner.getMinBackOdds();
+        final double maxLayOdds = managedRunner == null ? -1d : managedRunner.getMaxLayOdds();
+        final OrderMarketRunner orderMarketRunner = Statics.orderCache.getOrderMarketRunner(marketId, runnerId);
+        if (orderMarketRunner == null) { // no orderMarketRunner present, which means no orders placed on this runner, normal behavior
+        } else {
+            orderMarketRunner.getExposure(managedRunner, Statics.pendingOrdersThread);
+        }
+        final double matchedBackExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getMatchedBackExposure();
+        final double matchedLayExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getMatchedLayExposure();
+        final double totalBackExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getTotalBackExposure();
+        final double totalLayExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getTotalLayExposure();
+        final double runnerTotalValueTraded = marketRunner == null ? 0d : marketRunner.getTvEUR(Statics.existingFunds.currencyRate);
+        final double lastTradedPrice = marketRunner == null ? 0d : marketRunner.getLtp();
+        final TreeMap<Double, Double> availableToLay = marketRunner == null ? null : marketRunner.getAvailableToLay(Statics.existingFunds.currencyRate);
+        final TreeMap<Double, Double> availableToBack = marketRunner == null ? null : marketRunner.getAvailableToBack(Statics.existingFunds.currencyRate);
+        final TreeMap<Double, Double> myUnmatchedLay = orderMarketRunner == null ? null : orderMarketRunner.getUnmatchedLayAmounts();
+        final TreeMap<Double, Double> myUnmatchedBack = orderMarketRunner == null ? null : orderMarketRunner.getUnmatchedBackAmounts();
+
+        final Label runnerNameLabel = new Label(runnerName == null ? "null" : runnerName);
+        final TextField backAmountLimitNode = new TextField(decimalFormatTextField.format(Generic.keepDoubleWithinRange(backAmountLimit)));
+        backAmountLimitNode.setMaxWidth(60);
+        final TextField layAmountLimitNode = new TextField(decimalFormatTextField.format(Generic.keepDoubleWithinRange(layAmountLimit)));
+        layAmountLimitNode.setMaxWidth(60);
+        final TextField minBackOddsNode = new TextField(decimalFormatTextField.format(Generic.keepDoubleWithinRange(minBackOdds)));
+        minBackOddsNode.setMaxWidth(40);
+        final TextField maxLayOddsNode = new TextField(decimalFormatTextField.format(Generic.keepDoubleWithinRange(maxLayOdds)));
+        maxLayOddsNode.setMaxWidth(40);
+//        final Label matchedBackExposureLabel = new Label(String.valueOf(matchedBackExposure));
+//        final Label matchedLayExposureLabel = new Label(String.valueOf(matchedLayExposure));
+//        final Label totalBackExposureLabel = new Label(String.valueOf(totalBackExposure));
+//        final Label totalLayExposureLabel = new Label(String.valueOf(totalLayExposure));
+        final Label exposureLabel = new Label("bExp:" + GUIUtils.decimalFormat(totalBackExposure) + "(" + GUIUtils.decimalFormat(matchedBackExposure) + ") lExp:" + GUIUtils.decimalFormat(totalLayExposure) + "(" +
+                                              GUIUtils.decimalFormat(matchedLayExposure) + ")");
+        final Label runnerTotalValueTradedLabel = new Label("tv: €" + GUIUtils.decimalFormat(runnerTotalValueTraded));
+        runnerTotalValueTradedLabel.setPadding(new Insets(0, 10, 0, 0));
+        final Label lastTradedPriceLabel = new Label("ltp: " + decimalFormatLabelLow.format(lastTradedPrice));
+        lastTradedPriceLabel.setPadding(new Insets(0, 10, 0, 0));
+        final Label[] availableToBackLabel = new Label[N_PRICE_CELLS], availableToLayLabel = new Label[N_PRICE_CELLS];
+        int counter = 0;
+        if (availableToBack == null) { // nothing to be done
+        } else {
+            for (final Map.Entry<Double, Double> entry : availableToBack.entrySet()) {
+                final Double price = entry.getKey();
+                final Double size = entry.getValue();
+                availableToBackLabel[counter] = new Label(decimalFormatLabelLow.format(price) + "\n€" + GUIUtils.decimalFormat(size) + "\n");
+                availableToBackLabel[counter].setMinWidth(60);
+                availableToBackLabel[counter].setMinHeight(36);
+                GUIUtils.setCenterLabel(availableToBackLabel[counter]);
+                counter++;
+                if (counter >= N_PRICE_CELLS) {
+                    break;
+                }
+            }
+        }
+        //noinspection ForLoopWithMissingComponent
+        for (; counter < N_PRICE_CELLS; counter++) {
+            availableToBackLabel[counter] = new Label("");
+            availableToBackLabel[counter].setMinWidth(60);
+            availableToBackLabel[counter].setMinHeight(36);
+            GUIUtils.setCenterLabel(availableToBackLabel[counter]);
+        }
+        //noinspection ReuseOfLocalVariable
+        counter = 0;
+        if (availableToLay == null) { // nothing to be done
+        } else {
+            for (final Map.Entry<Double, Double> entry : availableToLay.entrySet()) {
+                final Double price = entry.getKey();
+                final Double size = entry.getValue();
+                availableToLayLabel[counter] = new Label(decimalFormatLabelLow.format(price) + "\n€" + GUIUtils.decimalFormat(size));
+                availableToLayLabel[counter].setMinWidth(60);
+                availableToLayLabel[counter].setMinHeight(36);
+                GUIUtils.setCenterLabel(availableToLayLabel[counter]);
+                counter++;
+                if (counter >= N_PRICE_CELLS) {
+                    break;
+                }
+            }
+        }
+        //noinspection ForLoopWithMissingComponent
+        for (; counter < N_PRICE_CELLS; counter++) {
+            availableToLayLabel[counter] = new Label("");
+            availableToLayLabel[counter].setMinWidth(60);
+            availableToLayLabel[counter].setMinHeight(36);
+            GUIUtils.setCenterLabel(availableToLayLabel[counter]);
+        }
+
+        GUIUtils.setOnKeyPressedTextField(backAmountLimitNode, backAmountLimit, RulesManagerModificationCommand.setBackAmountLimit, marketId, runnerId);
+        GUIUtils.handleDoubleTextField(backAmountLimitNode, backAmountLimit);
+        GUIUtils.setOnKeyPressedTextField(layAmountLimitNode, layAmountLimit, RulesManagerModificationCommand.setLayAmountLimit, marketId, runnerId);
+        GUIUtils.handleDoubleTextField(layAmountLimitNode, layAmountLimit);
+        GUIUtils.setOnKeyPressedTextFieldOdds(minBackOddsNode, focusedColumnIndex, focusedRowIndex, minBackOdds, RulesManagerModificationCommand.setMinBackOdds, marketId, runnerId);
+        GUIUtils.handleDoubleTextField(minBackOddsNode, minBackOdds);
+        GUIUtils.setOnKeyPressedTextFieldOdds(maxLayOddsNode, focusedColumnIndex, focusedRowIndex, maxLayOdds, RulesManagerModificationCommand.setMaxLayOdds, marketId, runnerId);
+        GUIUtils.handleDoubleTextField(maxLayOddsNode, maxLayOdds);
+
+        int columnIndex = 3;
+        mainGridPane.add(runnerNameLabel, columnIndex++, runnerRowIndex);
+        mainGridPane.add(backAmountLimitNode, columnIndex++, runnerRowIndex);
+        mainGridPane.add(minBackOddsNode, columnIndex++, runnerRowIndex);
+        for (int i = N_PRICE_CELLS - 1; i >= 0; i--) {
+            mainGridPane.add(availableToBackLabel[i], columnIndex++, runnerRowIndex);
+            if (i == 0) {
+                availableToBackLabel[i].setId("BackColoredCell");
+            } else {
+                availableToBackLabel[i].setId("NotColoredPriceSizeCell");
+            }
+        }
+        for (int i = 0; i < N_PRICE_CELLS; i++) {
+            mainGridPane.add(availableToLayLabel[i], columnIndex++, runnerRowIndex);
+            if (i == 0) {
+                availableToLayLabel[i].setId("LayColoredCell");
+            } else {
+                availableToLayLabel[i].setId("NotColoredPriceSizeCell");
+            }
+        }
+        mainGridPane.add(maxLayOddsNode, columnIndex++, runnerRowIndex);
+        mainGridPane.add(layAmountLimitNode, columnIndex++, runnerRowIndex);
+        mainGridPane.add(lastTradedPriceLabel, columnIndex++, runnerRowIndex);
+        mainGridPane.add(runnerTotalValueTradedLabel, columnIndex++, runnerRowIndex);
+        mainGridPane.add(exposureLabel, columnIndex, runnerRowIndex);
+
+        int currentLine = previousLinesRowIndex;
+        if (myUnmatchedBack == null) { // nothing to be done
+        } else {
+            for (final Map.Entry<Double, Double> entry : myUnmatchedBack.entrySet()) {
+                mainGridPane.add(unmatchedBackPreLabel, 0, currentLine);
+                mainGridPane.add(new Label(decimalFormatLabelLow.format(entry.getKey())), 1, currentLine);
+                mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(entry.getValue())), 2, currentLine++);
+            }
+        }
+        if (myUnmatchedLay == null) { // nothing to be done
+        } else {
+            for (final Map.Entry<Double, Double> entry : myUnmatchedLay.entrySet()) {
+                mainGridPane.add(unmatchedLayPreLabel, 0, currentLine);
+                mainGridPane.add(new Label(decimalFormatLabelLow.format(entry.getKey())), 1, currentLine);
+                mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(entry.getValue())), 2, currentLine++);
+            }
+        }
+        return currentLine;
+    }
+
+    @SuppressWarnings({"OverlyLongMethod", "ValueOfIncrementOrDecrementUsed"})
     private static void showManagedMarket(final String marketId, final TreeItem<String> currentMarket) {
         currentlyShownManagedObject = currentMarket;
+        mainGridPane.getChildren().clear();
         // marketName(ManagedMarket or newValue), eventName(parentEvent.value), getSimpleAmountLimit/getMaxMarketLimit(ManagedMarket), total value traded(Market), countDown until marketTime(MarketDefinition)
         // "open for" timer, starting at "open date"(MarketDefinition)
         // nTotalRunners(Market), nTotalActiveRunners(Market/MarketRunner/RunnerDefinition/RunnerStatus), nManagedRunners(ManagedMarket)
@@ -1324,31 +1521,54 @@ public class GUI
             final int nTotalRunners = cachedMarket == null ? -1 : cachedMarket.getNRunners();
             final int nActiveRunners = cachedMarket == null ? -1 : cachedMarket.getNActiveRunners();
             final int nManagedRunners = managedMarket.getNRunners();
+
+            final Label eventNameLabel = new Label(eventName);
+            final Label marketNameLabel = new Label(marketName);
+            final Label marketIdLabel = new Label(marketId);
+            final TextField simpleAmountLimitNode = new TextField(decimalFormatTextField.format(Generic.keepDoubleWithinRange(simpleAmountLimit)));
+            final Label calculatedAmountLimitLabel = new Label(decimalFormatLabelLow.format(calculatedAmountLimit));
+            final Label marketTotalValueTradedLabel = new Label(decimalFormatLabelLow.format(marketTotalValueTraded));
+            final Label marketLiveTimeLabel = new Label(marketLiveTime == null ? null : marketLiveTime.toString());
+            final Label marketOpenTimeLabel = new Label(marketOpenTime == null ? null : marketOpenTime.toString());
+            final Label nTotalRunnersLabel = new Label(String.valueOf(nTotalRunners));
+            final Label nActiveRunnersLabel = new Label(String.valueOf(nActiveRunners));
+            final Label nManagedRunnersLabel = new Label(String.valueOf(nManagedRunners));
+
+            GUIUtils.setOnKeyPressedTextField(simpleAmountLimitNode, simpleAmountLimit, RulesManagerModificationCommand.setMarketAmountLimit, marketId);
+            GUIUtils.handleDoubleTextField(simpleAmountLimitNode, simpleAmountLimit);
+
+            int rowIndex = 0;
+            mainGridPane.add(eventNamePreLabel, 0, rowIndex);
+            mainGridPane.add(eventNameLabel, 1, rowIndex++);
+            mainGridPane.add(marketNamePreLabel, 0, rowIndex);
+            mainGridPane.add(marketNameLabel, 1, rowIndex++);
+            mainGridPane.add(marketIdPreLabel, 0, rowIndex);
+            mainGridPane.add(marketIdLabel, 1, rowIndex++);
+            mainGridPane.add(simpleAmountLimitLabel, 0, rowIndex);
+            mainGridPane.add(simpleAmountLimitNode, 1, rowIndex++);
+            mainGridPane.add(calculatedAmountLimitPreLabel, 0, rowIndex);
+            mainGridPane.add(calculatedAmountLimitLabel, 1, rowIndex++);
+            mainGridPane.add(marketTotalValueTradedPreLabel, 0, rowIndex);
+            mainGridPane.add(marketTotalValueTradedLabel, 1, rowIndex++);
+            mainGridPane.add(marketLiveTimePreLabel, 0, rowIndex);
+            mainGridPane.add(marketLiveTimeLabel, 1, rowIndex++);
+            mainGridPane.add(marketOpenTimePreLabel, 0, rowIndex);
+            mainGridPane.add(marketOpenTimeLabel, 1, rowIndex++);
+            mainGridPane.add(nTotalRunnersPreLabel, 0, rowIndex);
+            mainGridPane.add(nTotalRunnersLabel, 1, rowIndex++);
+            mainGridPane.add(nActiveRunnersPreLabel, 0, rowIndex);
+            mainGridPane.add(nActiveRunnersLabel, 1, rowIndex++);
+            mainGridPane.add(nManagedRunnersPreLabel, 0, rowIndex);
+            mainGridPane.add(nManagedRunnersLabel, 1, rowIndex++);
+
+            int runnerIndex = 0;
             @NotNull final HashMap<RunnerId, ManagedRunner> managedRunners = managedMarket.getRunners();
             final HashMap<RunnerId, MarketRunner> allRunners = cachedMarket == null ? null : cachedMarket.getMarketRunners();
             for (@NotNull final Map.Entry<RunnerId, ManagedRunner> entry : managedRunners.entrySet()) {
                 final RunnerId runnerId = entry.getKey();
                 final ManagedRunner managedRunner = entry.getValue();
                 final MarketRunner marketRunner = allRunners == null ? null : allRunners.get(runnerId);
-                final String runnerName = marketCatalogue == null ? null : marketCatalogue.getRunnerName(runnerId);
-                final double backAmountLimit = managedRunner == null ? -1d : managedRunner.getBackAmountLimit();
-                final double layAmountLimit = managedRunner == null ? -1d : managedRunner.getLayAmountLimit();
-                final double minBackOdds = managedRunner == null ? -1d : managedRunner.getMinBackOdds();
-                final double maxLayOdds = managedRunner == null ? -1d : managedRunner.getMaxLayOdds();
-                final OrderMarketRunner orderMarketRunner = Statics.orderCache.getOrderMarketRunner(marketId, runnerId);
-                if (orderMarketRunner == null) { // no orderMarketRunner present, which means no orders placed on this runner, normal behavior
-                } else {
-                    orderMarketRunner.getExposure(managedRunner, Statics.pendingOrdersThread);
-                }
-                final double matchedBackExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getMatchedBackExposure();
-                final double matchedLayExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getMatchedLayExposure();
-                final double totalBackExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getTotalBackExposure();
-                final double totalLayExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getTotalLayExposure();
-                final double runnerTotalValueTraded = marketRunner == null ? 0d : marketRunner.getTvEUR(Statics.existingFunds.currencyRate);
-                final double lastTradedPrice = marketRunner == null ? 0d : marketRunner.getLtp();
-                final TreeMap<Double, Double> myUnmatchedLay = orderMarketRunner == null ? null : orderMarketRunner.getUnmatchedLayAmounts();
-                final TreeMap<Double, Double> myUnmatchedBack = orderMarketRunner == null ? null : orderMarketRunner.getUnmatchedBackAmounts();
-
+                rowIndex = showRunner(marketId, runnerId, managedRunner, marketRunner, marketCatalogue, rowIndex, runnerIndex++);
             }
             if (allRunners == null) { // no marketRunners list present, nothing to be done
             } else {
@@ -1357,29 +1577,17 @@ public class GUI
                     if (managedRunners.containsKey(runnerId)) { // I already parsed this in the previous for loop, nothing to be done here
                     } else { // non managed runner
                         final MarketRunner marketRunner = entry.getValue();
-                        final String runnerName = marketCatalogue == null ? null : marketCatalogue.getRunnerName(runnerId);
-                        final double backAmountLimit = -1d;
-                        final double layAmountLimit = -1d;
-                        final double minBackOdds = -1d;
-                        final double maxLayOdds = -1d;
-                        final OrderMarketRunner orderMarketRunner = Statics.orderCache.getOrderMarketRunner(marketId, runnerId);
-                        if (orderMarketRunner == null) { // no orderMarketRunner present, which means no orders placed on this runner, normal behavior
-                        } else {
-                            orderMarketRunner.getExposure(null, Statics.pendingOrdersThread); // calculate the exposure
-                        }
-                        final double matchedBackExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getMatchedBackExposure();
-                        final double matchedLayExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getMatchedLayExposure();
-                        final double totalBackExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getTotalBackExposure();
-                        final double totalLayExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getTotalLayExposure();
-                        final double runnerTotalValueTraded = marketRunner == null ? 0d : marketRunner.getTvEUR(Statics.existingFunds.currencyRate);
-                        final double lastTradedPrice = marketRunner == null ? 0d : marketRunner.getLtp();
-                        final TreeMap<Double, Double> availableToLay = marketRunner == null ? null : marketRunner.getAvailableToLay(Statics.existingFunds.currencyRate);
-                        final TreeMap<Double, Double> availableToBack = marketRunner == null ? null : marketRunner.getAvailableToBack(Statics.existingFunds.currencyRate);
-                        final TreeMap<Double, Double> myUnmatchedLay = orderMarketRunner == null ? null : orderMarketRunner.getUnmatchedLayAmounts();
-                        final TreeMap<Double, Double> myUnmatchedBack = orderMarketRunner == null ? null : orderMarketRunner.getUnmatchedBackAmounts();
-
+                        rowIndex = showRunner(marketId, runnerId, null, marketRunner, marketCatalogue, rowIndex, runnerIndex++);
                     }
                 } // end for
+            }
+
+            if (focusedColumnIndex.get() >= 0 && focusedRowIndex.get() >= 0) {
+                final Node focusedNode = GUIUtils.getNodeByRowColumnIndex(mainGridPane, focusedColumnIndex.getAndSet(-1), focusedRowIndex.getAndSet(-1));
+                if (focusedNode == null) { // nothing was focused, nothing to be done
+                } else {
+                    focusedNode.requestFocus();
+                }
             }
         }
     }
@@ -1440,6 +1648,7 @@ public class GUI
         });
 
         filterTextField.setPromptText("Enter filter text ...");
+        filterTextField.setStyle("-fx-background-color: black;");
         rightVBox.getChildren().add(filterTextField);
 
         rightEventTreeRoot.predicateProperty().bind(Bindings.createObjectBinding(() -> {
@@ -1467,6 +1676,7 @@ public class GUI
                 refreshEventsButton.fire();
 
                 mainSplitPaneNodesList.add(rightVBox);
+                mainSplitPane.setDividerPositions(.16, .83);
                 topBarNodesList.add(topBarNodesList.size() - 1, refreshEventsButton);
                 rightPaneButton.setText("Hide _events");
                 filterTextField.requestFocus();
@@ -1478,50 +1688,19 @@ public class GUI
 
         topBarNodesList.addAll(fixedTotalFundsLabel, totalFundsLabel, fixedAvailableLabel, availableLabel, fixedReserveLabel, reserveLabel, fixedExposureLabel, exposureLabel, hugeSpacer, rightPaneButton);
 
-        rightTreeView.setOnMouseClicked(ae -> {
-            @NotNull final TreeItem<String> selectedItem = rightTreeView.getSelectionModel().getSelectedItem();
-            if (selectedItem == null) {
-                logger.info("likely not clicked on a tree member, null selectedItem in rightTreeView setOnMouseClicked");
-            } else {
-                selectedItem.setExpanded(true);
-                final String eventId = eventsTreeItemMap.getKey(selectedItem);
-                if (eventId == null) {
-                    final String marketId = marketsTreeItemMap.getKey(selectedItem);
-                    if (marketId == null) {
-                        if (Objects.equals(selectedItem.getValue(), DEFAULT_EVENT_NAME)) { // I have clicked the default event, normal behavior, nothing to be done
-                        } else {
-                            logger.error("null eventId and marketId in selected right treeItem: {}", selectedItem);
-                        }
-                    } else {
-                        Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(SynchronizedMapModificationCommand.getMarkets, MarketCatalogue.class, marketId)); // send command to refresh market
-                    }
-                } else {
-                    final Event event = Statics.eventsMap.get(eventId);
-                    if (event == null) {
-                        logger.error("null event for eventId {} in selected right treeItem: {}", eventId, selectedItem);
-                    } else {
-                        Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(SynchronizedMapModificationCommand.getMarkets, Event.class, event)); // send command to get markets for the selected event
-                    }
-                }
-            }
-
-
-            ae.consume();
-        });
-
-
-//        rightTreeView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
-//            if (newValue == null) {
-//                logger.info("likely not clicked on a tree member, null newValue in rightTreeView addListener, oldValue: {}", oldValue);
+//        rightTreeView.setOnMouseClicked(ae -> {
+//            @NotNull final TreeItem<String> selectedItem = rightTreeView.getSelectionModel().getSelectedItem();
+//            if (selectedItem == null) {
+//                logger.info("likely not clicked on a tree member, null selectedItem in rightTreeView setOnMouseClicked");
 //            } else {
-//                newValue.setExpanded(true);
-//                final String eventId = eventsTreeItemMap.getKey(newValue);
+//                selectedItem.setExpanded(true);
+//                final String eventId = eventsTreeItemMap.getKey(selectedItem);
 //                if (eventId == null) {
-//                    final String marketId = marketsTreeItemMap.getKey(newValue);
+//                    final String marketId = marketsTreeItemMap.getKey(selectedItem);
 //                    if (marketId == null) {
-//                        if (Objects.equals(newValue.getValue(), DEFAULT_EVENT_NAME)) { // I have clicked the default event, normal behavior, nothing to be done
+//                        if (Objects.equals(selectedItem.getValue(), DEFAULT_EVENT_NAME)) { // I have clicked the default event, normal behavior, nothing to be done
 //                        } else {
-//                            logger.error("null eventId and marketId in selected right treeItem: {}", newValue);
+//                            logger.error("null eventId and marketId in selected right treeItem: {}", selectedItem);
 //                        }
 //                    } else {
 //                        Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(SynchronizedMapModificationCommand.getMarkets, MarketCatalogue.class, marketId)); // send command to refresh market
@@ -1529,13 +1708,40 @@ public class GUI
 //                } else {
 //                    final Event event = Statics.eventsMap.get(eventId);
 //                    if (event == null) {
-//                        logger.error("null event for eventId {} in selected right treeItem: {}", eventId, newValue);
+//                        logger.error("null event for eventId {} in selected right treeItem: {}", eventId, selectedItem);
 //                    } else {
 //                        Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(SynchronizedMapModificationCommand.getMarkets, Event.class, event)); // send command to get markets for the selected event
 //                    }
 //                }
 //            }
 //        });
+
+        rightTreeView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue == null) {
+                logger.info("likely not clicked on a tree member, null newValue in rightTreeView addListener, oldValue: {}", oldValue);
+            } else {
+                newValue.setExpanded(true);
+                final String eventId = eventsTreeItemMap.getKey(newValue);
+                if (eventId == null) {
+                    final String marketId = marketsTreeItemMap.getKey(newValue);
+                    if (marketId == null) {
+                        if (Objects.equals(newValue.getValue(), DEFAULT_EVENT_NAME)) { // I have clicked the default event, normal behavior, nothing to be done
+                        } else {
+                            logger.error("null eventId and marketId in selected right treeItem: {}", newValue);
+                        }
+                    } else {
+                        Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(SynchronizedMapModificationCommand.getMarkets, MarketCatalogue.class, marketId)); // send command to refresh market
+                    }
+                } else {
+                    final Event event = Statics.eventsMap.get(eventId);
+                    if (event == null) {
+                        logger.error("null event for eventId {} in selected right treeItem: {}", eventId, newValue);
+                    } else {
+                        Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(SynchronizedMapModificationCommand.getMarkets, Event.class, event)); // send command to get markets for the selected event
+                    }
+                }
+            }
+        });
 
         final MenuItem entryRight1 = new MenuItem("Add Managed Object");
         entryRight1.setOnAction(ae -> {
@@ -1562,7 +1768,6 @@ public class GUI
                 }
                 Statics.threadPoolExecutor.submit(() -> Utils.createManagedMarket(marketId, eventId));
             }
-            ae.consume();
         });
         final ContextMenu rightContextMenu = new ContextMenu(entryRight1);
         rightContextMenu.setOnShowing(ae -> {
@@ -1575,7 +1780,6 @@ public class GUI
                 logger.error("treeItem not contained in markets nor events maps in rightContextMenu: {} {}", treeItem, treeItem == null ? null : treeItem.getParent());
                 entryRight1.setText("Add Managed Object");
             }
-            ae.consume();
         });
         rightTreeView.setContextMenu(rightContextMenu);
 
@@ -1597,7 +1801,6 @@ public class GUI
             } else {
                 Statics.threadPoolExecutor.submit(() -> Utils.removeManagedMarket(marketId));
             }
-            ae.consume();
         });
         final ContextMenu leftContextMenu = new ContextMenu(entryLeft1);
         leftContextMenu.setOnShowing(ae -> {
@@ -1610,7 +1813,6 @@ public class GUI
                 logger.error("treeItem not contained in markets nor events maps in leftContextMenu: {} {}", treeItem, treeItem == null ? null : treeItem.getParent());
                 entryLeft1.setText("Remove Managed Object");
             }
-            ae.consume();
         });
         leftTreeView.setContextMenu(leftContextMenu);
 

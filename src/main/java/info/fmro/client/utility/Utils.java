@@ -54,7 +54,7 @@ public final class Utils {
                 logger.warn("trying to recreate existing ManagedMarket for {} {} {} {}", eventId, marketId, eventName, marketName);
             } else {
                 logger.info("client->server create default ManagedMarket for {} {} {} {}", eventId, marketId, eventName, marketName);
-                final ManagedMarket managedMarket = new ManagedMarket(marketId, Statics.marketCache, Statics.rulesManager);
+                final ManagedMarket managedMarket = new ManagedMarket(marketId, Statics.marketCache, Statics.rulesManager, Statics.marketCataloguesMap);
                 Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(RulesManagerModificationCommand.addManagedMarket, marketId, managedMarket));
             }
         }

@@ -52,15 +52,15 @@ public class ClientRulesManager
     @Override
     public synchronized void executeCommand(@NotNull final String commandString, @NotNull final OrdersThreadInterface pendingOrdersThread, @NotNull final OrderCache orderCache, @NotNull final ExistingFunds safetyLimits,
                                             @NotNull final SynchronizedMap<? super String, ? extends MarketCatalogue> marketCataloguesMap, @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap,
-                                            @NotNull final RulesManager rulesManager) {
+                                            @NotNull final MarketCache marketCache) {
         logger.error("executeCommand method is not and should not be implemented in Client");
     }
 
     @Override
     @NotNull
-    protected synchronized ManagedEvent addManagedEvent(@NotNull final String eventId, @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap, @NotNull final RulesManager rulesManager) {
+    protected synchronized ManagedEvent addManagedEvent(@NotNull final String eventId, @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap) {
         final ManagedEvent existingEvent = this.events.get(eventId);
-        final ManagedEvent managedEvent = super.addManagedEvent(eventId, eventsMap, rulesManager);
+        final ManagedEvent managedEvent = super.addManagedEvent(eventId, eventsMap);
         if (Objects.equals(existingEvent, managedEvent)) { // no modification was made
         } else {
             GUI.publicAddManagedEvent(eventId, managedEvent);
@@ -79,14 +79,14 @@ public class ClientRulesManager
 
     @Override
     protected synchronized ManagedMarket addManagedMarket(@NotNull final String marketId, @NotNull final SynchronizedMap<? super String, ? extends MarketCatalogue> marketCataloguesMap, @NotNull final MarketCache marketCache,
-                                                          @NotNull final RulesManager rulesManager, @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap) {
+                                                          @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap) {
         logger.error("no need to use ClientRulesManager overridden addManagedMarket(2 args), use the version without marketCataloguesMap!");
         return addManagedMarket(marketId);
     }
 
     @Override
     public synchronized boolean addManagedMarket(@NotNull final String marketId, final ManagedMarket managedMarket, @NotNull final SynchronizedMap<? super String, ? extends MarketCatalogue> marketCataloguesMap,
-                                                 @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap, @NotNull final RulesManager rulesManager) {
+                                                 @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap) {
         logger.error("no need to use ClientRulesManager overridden addManagedMarket(3 args), use the version without marketCataloguesMap!");
         return addManagedMarket(marketId, managedMarket);
     }
@@ -94,7 +94,7 @@ public class ClientRulesManager
     @SuppressWarnings("WeakerAccess")
     protected synchronized ManagedMarket addManagedMarket(@NotNull final String marketId) {
         final ManagedMarket existingMarket = this.markets.get(marketId);
-        final ManagedMarket managedMarket = super.addManagedMarket(marketId, Statics.marketCataloguesMap, Statics.marketCache, Statics.rulesManager, Statics.eventsMap);
+        final ManagedMarket managedMarket = super.addManagedMarket(marketId, Statics.marketCataloguesMap, Statics.marketCache, Statics.eventsMap);
         if (Objects.equals(existingMarket, managedMarket)) { // no modification was made
         } else {
             GUI.publicAddManagedMarket(marketId, managedMarket);
@@ -103,7 +103,7 @@ public class ClientRulesManager
     }
 
     public synchronized boolean addManagedMarket(@NotNull final String marketId, final ManagedMarket managedMarket) {
-        final boolean success = super.addManagedMarket(marketId, managedMarket, Statics.marketCataloguesMap, Statics.eventsMap, Statics.rulesManager);
+        final boolean success = super.addManagedMarket(marketId, managedMarket, Statics.marketCataloguesMap, Statics.eventsMap);
         if (success) {
             GUI.publicAddManagedMarket(marketId, managedMarket);
         }
