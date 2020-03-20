@@ -11,7 +11,6 @@ import info.fmro.shared.stream.cache.market.MarketCache;
 import info.fmro.shared.stream.cache.order.OrderCache;
 import info.fmro.shared.stream.objects.OrdersThreadInterface;
 import info.fmro.shared.stream.objects.StreamSynchronizedMap;
-import info.fmro.shared.utility.SynchronizedMap;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -38,7 +37,7 @@ public class ClientRulesManager
     }
 
     @Override
-    public synchronized ManagedEvent removeManagedEvent(final String eventId) {
+    public synchronized ManagedEvent removeManagedEvent(final String eventId, @NotNull final StreamSynchronizedMap<? super String, ? extends MarketCatalogue> marketCataloguesMap) {
         if (this.events.containsKey(eventId)) {
             final ManagedEvent existingManagedEvent = this.events.get(eventId);
             @Nullable final HashSet<String> marketIds = existingManagedEvent == null ? null : existingManagedEvent.marketIds.copy();
@@ -46,21 +45,22 @@ public class ClientRulesManager
         } else { // nothing will be removed
         }
 
-        return super.removeManagedEvent(eventId);
+        return super.removeManagedEvent(eventId, marketCataloguesMap);
     }
 
     @Override
     public synchronized void executeCommand(@NotNull final String commandString, @NotNull final OrdersThreadInterface pendingOrdersThread, @NotNull final OrderCache orderCache, @NotNull final ExistingFunds safetyLimits,
-                                            @NotNull final SynchronizedMap<? super String, ? extends MarketCatalogue> marketCataloguesMap, @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap,
-                                            @NotNull final MarketCache marketCache) {
+                                            @NotNull final StreamSynchronizedMap<? super String, ? extends MarketCatalogue> marketCataloguesMap, @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap,
+                                            @NotNull final MarketCache marketCache, final long programStartTime) {
         logger.error("executeCommand method is not and should not be implemented in Client");
     }
 
     @Override
     @NotNull
-    protected synchronized ManagedEvent addManagedEvent(@NotNull final String eventId, @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap) {
+    protected synchronized ManagedEvent addManagedEvent(@NotNull final String eventId, @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap,
+                                                        @NotNull final StreamSynchronizedMap<? super String, ? extends MarketCatalogue> marketCataloguesMap) {
         final ManagedEvent existingEvent = this.events.get(eventId);
-        final ManagedEvent managedEvent = super.addManagedEvent(eventId, eventsMap);
+        final ManagedEvent managedEvent = super.addManagedEvent(eventId, eventsMap, marketCataloguesMap);
         if (Objects.equals(existingEvent, managedEvent)) { // no modification was made
         } else {
             GUI.publicAddManagedEvent(eventId, managedEvent);
@@ -78,23 +78,23 @@ public class ClientRulesManager
     }
 
     @Override
-    protected synchronized ManagedMarket addManagedMarket(@NotNull final String marketId, @NotNull final SynchronizedMap<? super String, ? extends MarketCatalogue> marketCataloguesMap, @NotNull final MarketCache marketCache,
-                                                          @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap) {
-        logger.error("no need to use ClientRulesManager overridden addManagedMarket(2 args), use the version without marketCataloguesMap!");
+    protected synchronized ManagedMarket addManagedMarket(@NotNull final String marketId, @NotNull final StreamSynchronizedMap<? super String, ? extends MarketCatalogue> marketCataloguesMap, @NotNull final MarketCache marketCache,
+                                                          @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap, final long programStartTime) {
+//        logger.error("no need to use ClientRulesManager overridden addManagedMarket(2 args), use the version without marketCataloguesMap!");
         return addManagedMarket(marketId);
     }
 
     @Override
-    public synchronized boolean addManagedMarket(@NotNull final String marketId, final ManagedMarket managedMarket, @NotNull final SynchronizedMap<? super String, ? extends MarketCatalogue> marketCataloguesMap,
+    public synchronized boolean addManagedMarket(@NotNull final String marketId, final ManagedMarket managedMarket, @NotNull final StreamSynchronizedMap<? super String, ? extends MarketCatalogue> marketCataloguesMap,
                                                  @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap) {
-        logger.error("no need to use ClientRulesManager overridden addManagedMarket(3 args), use the version without marketCataloguesMap!");
+//        logger.error("no need to use ClientRulesManager overridden addManagedMarket(3 args), use the version without marketCataloguesMap!");
         return addManagedMarket(marketId, managedMarket);
     }
 
     @SuppressWarnings("WeakerAccess")
     protected synchronized ManagedMarket addManagedMarket(@NotNull final String marketId) {
         final ManagedMarket existingMarket = this.markets.get(marketId);
-        final ManagedMarket managedMarket = super.addManagedMarket(marketId, Statics.marketCataloguesMap, Statics.marketCache, Statics.eventsMap);
+        final ManagedMarket managedMarket = super.addManagedMarket(marketId, Statics.marketCataloguesMap, Statics.marketCache, Statics.eventsMap, Statics.PROGRAM_START_TIME);
         if (Objects.equals(existingMarket, managedMarket)) { // no modification was made
         } else {
             GUI.publicAddManagedMarket(marketId, managedMarket);
@@ -111,11 +111,11 @@ public class ClientRulesManager
     }
 
     @Override
-    public synchronized ManagedMarket removeManagedMarket(final String marketId) {
+    public synchronized ManagedMarket removeManagedMarket(final String marketId, @NotNull final StreamSynchronizedMap<? super String, ? extends MarketCatalogue> marketCataloguesMap) {
         if (this.markets.containsKey(marketId)) {
             GUI.publicRemoveManagedMarket(marketId);
         } else { // nothing will be removed
         }
-        return super.removeManagedMarket(marketId);
+        return super.removeManagedMarket(marketId, marketCataloguesMap);
     }
 }

@@ -3,6 +3,7 @@ package info.fmro.client.main;
 import info.fmro.client.objects.Statics;
 import info.fmro.client.threads.MaintenanceThread;
 import info.fmro.client.threads.TimeJumpDetectorThread;
+import info.fmro.shared.enums.ProgramName;
 import info.fmro.shared.utility.CustomUncaughtExceptionHandler;
 import info.fmro.shared.utility.Generic;
 import javafx.application.Application;
@@ -25,8 +26,9 @@ final class Client {
     private Client() {
     }
 
-    @SuppressWarnings("MethodWithMultipleReturnPoints")
+    @SuppressWarnings({"MethodWithMultipleReturnPoints", "OverlyLongMethod"})
     public static void main(final String[] args) {
+        Generic.programName.set(ProgramName.CLIENT);
         Statics.standardStreamsList = Generic.replaceStandardStreams(Statics.STDOUT_FILE_NAME, Statics.STDERR_FILE_NAME, Statics.LOGS_FOLDER_NAME, !Statics.closeStandardStreamsNotInitialized);
 
         FileOutputStream outFileOutputStream = null, errFileOutputStream = null;

@@ -1,13 +1,18 @@
 package info.fmro.client.utility;
 
+import info.fmro.client.objects.ClientStreamSynchronizedMap;
 import info.fmro.client.objects.Statics;
 import info.fmro.shared.enums.RulesManagerModificationCommand;
 import info.fmro.shared.logic.ManagedEvent;
 import info.fmro.shared.logic.ManagedMarket;
 import info.fmro.shared.stream.objects.SerializableObjectModification;
 import info.fmro.shared.utility.Formulas;
+import info.fmro.shared.utility.Generic;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.Serializable;
 
 @SuppressWarnings("UtilityClass")
 public final class Utils {
@@ -54,7 +59,7 @@ public final class Utils {
                 logger.warn("trying to recreate existing ManagedMarket for {} {} {} {}", eventId, marketId, eventName, marketName);
             } else {
                 logger.info("client->server create default ManagedMarket for {} {} {} {}", eventId, marketId, eventName, marketName);
-                final ManagedMarket managedMarket = new ManagedMarket(marketId, Statics.marketCache, Statics.rulesManager, Statics.marketCataloguesMap);
+                final ManagedMarket managedMarket = new ManagedMarket(marketId, Statics.marketCache, Statics.rulesManager, Statics.marketCataloguesMap, Statics.PROGRAM_START_TIME);
                 Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(RulesManagerModificationCommand.addManagedMarket, marketId, managedMarket));
             }
         }
@@ -70,6 +75,16 @@ public final class Utils {
             } else {
                 logger.error("trying to remove non existing ManagedMarket {}", marketId);
             }
+        }
+    }
+
+    public static void checkMapValues(final ClientStreamSynchronizedMap<String, ? extends Serializable> mapToUse, @NotNull final Iterable<String> ids) {
+        if (mapToUse == Statics.marketCataloguesMap) {
+            // not used for now
+        } else if (mapToUse == Statics.eventsMap) {
+            // not used for now
+        } else {
+            logger.error("unknown mapToUse in checkMapValues for: {} {}", Generic.objectToString(ids), Generic.objectToString(mapToUse));
         }
     }
 }

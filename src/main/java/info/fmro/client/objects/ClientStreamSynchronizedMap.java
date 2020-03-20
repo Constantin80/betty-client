@@ -69,11 +69,11 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
                 if (readSuccessful) {
                     if (this.isEventsMap) {
                         GUI.initializeEventsTreeView();
-                        GUI.publicMarkAllManagedEventsAsExpired();
-                        GUI.publicMarkManagedEventsAsNotExpired((Iterable<String>) this.keySetCopy());
                     } else {
                         GUI.initializeMarketsTreeView();
                     }
+                    GUI.publicMarkAllManagedItemsAsExpired(this.isEventsMap);
+                    GUI.publicMarkManagedItemsAsNotExpired((Iterable<String>) this.keySetCopy(), this.isEventsMap);
                 } else { // I probably shouldn't initialize if !readSuccessful
                 }
             } else {
@@ -91,10 +91,10 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
         } else {
             if (this.isEventsMap) {
                 GUI.clearEventsTreeView();
-                GUI.publicMarkAllManagedEventsAsExpired();
             } else {
                 GUI.clearMarketsTreeView();
             }
+            GUI.publicMarkAllManagedItemsAsExpired(this.isEventsMap);
         }
         return result;
     }
@@ -106,10 +106,10 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
         } else {
             if (this.isEventsMap) {
                 GUI.publicAddEvent((String) key, (Event) value);
-                GUI.publicMarkManagedEventAsNotExpired((String) key);
             } else {
                 GUI.publicAddMarket((String) key, (MarketCatalogue) value);
             }
+            GUI.publicMarkManagedItemAsNotExpired((String) key, this.isEventsMap);
         }
         return result;
     }
@@ -121,10 +121,10 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
         } else {
             if (this.isEventsMap) {
                 GUI.publicAddEvent((String) key, (Event) value);
-                GUI.publicMarkManagedEventAsNotExpired((String) key);
             } else {
                 GUI.publicAddMarket((String) key, (MarketCatalogue) value);
             }
+            GUI.publicMarkManagedItemAsNotExpired((String) key, this.isEventsMap);
         }
         return result;
     }
@@ -136,10 +136,10 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
         } else {
             if (this.isEventsMap) {
                 GUI.publicAddEvent((String) key, (Event) value);
-                GUI.publicMarkManagedEventAsNotExpired((String) key);
             } else {
                 GUI.publicAddMarket((String) key, (MarketCatalogue) value);
             }
+            GUI.publicMarkManagedItemAsNotExpired((String) key, this.isEventsMap);
         }
         return result;
     }
@@ -150,13 +150,13 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
         super.putAll(m);
         if (this.isEventsMap) {
             GUI.publicPutAllEvent((Map<String, Event>) m);
-            if (m == null) {
-                logger.error("null map in putAll isEventsMap for: {}", Generic.objectToString(this));
-            } else {
-                GUI.publicMarkManagedEventsAsNotExpired((Iterable<String>) m.keySet());
-            }
         } else {
             GUI.publicPutAllMarket((Map<String, MarketCatalogue>) m);
+        }
+        if (m == null) {
+            logger.error("null map in putAll isEventsMap for: {}", Generic.objectToString(this));
+        } else {
+            GUI.publicMarkManagedItemsAsNotExpired((Iterable<String>) m.keySet(), this.isEventsMap);
         }
     }
 
@@ -165,10 +165,10 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
         if (containsKey(key)) {
             if (this.isEventsMap) {
                 GUI.publicRemoveEvent((String) key);
-                GUI.publicMarkManagedEventAsExpired((String) key);
             } else {
                 GUI.publicRemoveMarket((String) key);
             }
+            GUI.publicMarkManagedItemAsExpired((String) key, this.isEventsMap);
         } else { // no key removed, nothing to be done
         }
         return super.remove(key);
@@ -180,10 +180,10 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
         if (modified) {
             if (this.isEventsMap) {
                 GUI.publicRemoveEvent((String) key);
-                GUI.publicMarkManagedEventAsExpired((String) key);
             } else {
                 GUI.publicRemoveMarket((MarketCatalogue) value);
             }
+            GUI.publicMarkManagedItemAsExpired((String) key, this.isEventsMap);
         } else { // no modification made, I won't send anything
         }
         return modified;
@@ -195,10 +195,10 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
         if (modified) {
             if (this.isEventsMap) {
                 GUI.publicRemoveEvent((String) entry.getKey());
-                GUI.publicMarkManagedEventAsExpired((String) entry.getKey());
             } else {
                 GUI.publicRemoveMarket((MarketCatalogue) entry.getValue());
             }
+            GUI.publicMarkManagedItemAsExpired((String) entry.getKey(), this.isEventsMap);
         } else { // no modification made, I won't send anything
         }
         return modified;
@@ -209,21 +209,24 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
     public synchronized boolean removeAllEntries(final Collection<?> c) {
         if (this.isEventsMap) {
             GUI.publicRemoveEntriesEvent((Collection<Map.Entry<String, Event>>) c);
-            if (c == null) {
-                logger.error("null collection in removeAllEntries isEventsMap for: {}", Generic.objectToString(this));
-            } else {
-                final Collection<String> ids = new HashSet<>(Generic.getCollectionCapacity(c));
-                for (final Map.Entry<String, Event> entry : (Collection<Map.Entry<String, Event>>) c) {
-                    if (entry == null) {
-                        logger.error("null entry in collection in removeAllEntries isEventsMap for: {} {}", Generic.objectToString(c), Generic.objectToString(this));
-                    } else {
-                        ids.add(entry.getKey());
-                    }
-                }
-                GUI.publicMarkManagedEventsAsExpired(ids);
-            }
         } else {
             GUI.publicRemoveEntriesMarket((Collection<Map.Entry<String, MarketCatalogue>>) c);
+        }
+        if (c == null) {
+            logger.error("null collection in removeAllEntries isEventsMap for: {}", Generic.objectToString(this));
+        } else {
+            final Collection<String> ids = new HashSet<>(Generic.getCollectionCapacity(c));
+            for (final Map.Entry<String, Event> entry : (Collection<Map.Entry<String, Event>>) c) {
+                if (entry == null) {
+                    logger.error("null entry in collection in removeAllEntries isEventsMap for: {} {}", Generic.objectToString(c), Generic.objectToString(this));
+                } else {
+                    ids.add(entry.getKey());
+                }
+            }
+            if (ids.isEmpty()) { // nothing to mark as expired
+            } else {
+                GUI.publicMarkManagedItemsAsExpired(ids, this.isEventsMap);
+            }
         }
         return super.removeAllEntries(c);
     }
@@ -233,20 +236,23 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
     public synchronized boolean retainAllEntries(final Collection<?> c) {
         if (this.isEventsMap) {
             GUI.publicRetainEntriesEvent((Collection<Map.Entry<String, Event>>) c);
-            if (c == null) {
-                logger.error("null collection in retainAllEntries isEventsMap for: {}", Generic.objectToString(this));
-            } else {
-                final Collection<String> keysToRemove = new HashSet<>(Generic.getCollectionCapacity(size()));
-                for (final Map.Entry<K, V> entry : entrySetCopy()) {
-                    if (c.contains(entry)) { // not the value I look for, will continue
-                    } else {
-                        keysToRemove.add((String) entry.getKey());
-                    }
-                }
-                GUI.publicMarkManagedEventsAsExpired(keysToRemove);
-            }
         } else {
             GUI.publicRetainEntriesMarket((Collection<Map.Entry<String, MarketCatalogue>>) c);
+        }
+        if (c == null) {
+            logger.error("null collection in retainAllEntries isEventsMap for: {}", Generic.objectToString(this));
+        } else {
+            final Collection<String> keysToRemove = new HashSet<>(Generic.getCollectionCapacity(size()));
+            for (final Map.Entry<K, V> entry : entrySetCopy()) {
+                if (c.contains(entry)) { // not the value I look for, will continue
+                } else {
+                    keysToRemove.add((String) entry.getKey());
+                }
+            }
+            if (keysToRemove.isEmpty()) { // nothing to mark as expired
+            } else {
+                GUI.publicMarkManagedItemsAsExpired(keysToRemove, this.isEventsMap);
+            }
         }
         return super.retainAllEntries(c);
     }
@@ -258,10 +264,10 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
         if (modified) {
             if (this.isEventsMap) {
                 GUI.publicRemoveKeysEvent((Collection<String>) c);
-                GUI.publicMarkManagedEventsAsExpired((Collection<String>) c);
             } else {
                 GUI.publicRemoveKeysMarket((Collection<String>) c);
             }
+            GUI.publicMarkManagedItemsAsExpired((Collection<String>) c, this.isEventsMap);
         } else { // no modification made, nothing to be done
         }
         return modified;
@@ -272,20 +278,23 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
     public synchronized boolean retainAllKeys(final Collection<?> c) {
         if (this.isEventsMap) {
             GUI.publicRetainKeysEvent((Collection<String>) c);
-            if (c == null) {
-                logger.error("null collection in retainAllKeys isEventsMap for: {}", Generic.objectToString(this));
-            } else {
-                final Collection<String> keysToRemove = new HashSet<>(Generic.getCollectionCapacity(size()));
-                for (final K key : keySetCopy()) {
-                    if (c.contains(key)) { // not the value I look for, will continue
-                    } else {
-                        keysToRemove.add((String) key);
-                    }
-                }
-                GUI.publicMarkManagedEventsAsExpired(keysToRemove);
-            }
         } else {
             GUI.publicRetainKeysMarket((Collection<String>) c);
+        }
+        if (c == null) {
+            logger.error("null collection in retainAllKeys isEventsMap for: {}", Generic.objectToString(this));
+        } else {
+            final Collection<String> keysToRemove = new HashSet<>(Generic.getCollectionCapacity(size()));
+            for (final K key : keySetCopy()) {
+                if (c.contains(key)) { // not the value I look for, will continue
+                } else {
+                    keysToRemove.add((String) key);
+                }
+            }
+            if (keysToRemove.isEmpty()) { // nothing to mark as expired
+            } else {
+                GUI.publicMarkManagedItemsAsExpired(keysToRemove, this.isEventsMap);
+            }
         }
         return super.retainAllKeys(c);
     }
@@ -295,15 +304,15 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
         if (containsValue(value)) {
             if (this.isEventsMap) {
                 GUI.publicRemoveEvent((Event) value);
-                for (final Map.Entry<K, V> entry : entrySetCopy()) {
-                    if (Objects.equals(entry.getValue(), value)) {
-                        GUI.publicMarkManagedEventAsExpired((String) entry.getKey());
-                        break;
-                    } else { // not the value I look for, will continue
-                    }
-                }
             } else {
                 GUI.publicRemoveMarket((MarketCatalogue) value);
+            }
+            for (final Map.Entry<K, V> entry : entrySetCopy()) {
+                if (Objects.equals(entry.getValue(), value)) {
+                    GUI.publicMarkManagedItemAsExpired((String) entry.getKey(), this.isEventsMap);
+                    break;
+                } else { // not the value I look for, will continue
+                }
             }
         } else { // no modification made, I won't send anything
         }
@@ -315,16 +324,19 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
         if (containsValue(value)) {
             if (this.isEventsMap) {
                 GUI.publicRemoveValueAllEvent((Event) value);
-                final Collection<String> keysToRemove = new HashSet<>(2);
-                for (final Map.Entry<K, V> entry : entrySetCopy()) {
-                    if (Objects.equals(entry.getValue(), value)) {
-                        keysToRemove.add((String) entry.getKey());
-                    } else { // not the value I look for, will continue
-                    }
-                }
-                GUI.publicMarkManagedEventsAsExpired(keysToRemove);
             } else {
                 GUI.publicRemoveValueAllMarket((MarketCatalogue) value);
+            }
+            final Collection<String> keysToRemove = new HashSet<>(2);
+            for (final Map.Entry<K, V> entry : entrySetCopy()) {
+                if (Objects.equals(entry.getValue(), value)) {
+                    keysToRemove.add((String) entry.getKey());
+                } else { // not the value I look for, will continue
+                }
+            }
+            if (keysToRemove.isEmpty()) { // nothing to mark as expired
+            } else {
+                GUI.publicMarkManagedItemsAsExpired(keysToRemove, this.isEventsMap);
             }
         } else { // no modification made, I won't send anything
         }
@@ -336,20 +348,23 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
     public synchronized boolean removeAllValues(final Collection<?> c) {
         if (this.isEventsMap) {
             GUI.publicRemoveValuesEvent((Collection<Event>) c);
-            if (c == null) {
-                logger.error("null collection in removeAllValues isEventsMap for: {}", Generic.objectToString(this));
-            } else {
-                final Collection<String> keysToRemove = new HashSet<>(Generic.getCollectionCapacity(c));
-                for (final Map.Entry<K, V> entry : entrySetCopy()) {
-                    if (c.contains(entry.getValue())) {
-                        keysToRemove.add((String) entry.getKey());
-                    } else { // not the value I look for, will continue
-                    }
-                }
-                GUI.publicMarkManagedEventsAsExpired(keysToRemove);
-            }
         } else {
             GUI.publicRemoveValuesMarket((Collection<MarketCatalogue>) c);
+        }
+        if (c == null) {
+            logger.error("null collection in removeAllValues isEventsMap for: {}", Generic.objectToString(this));
+        } else {
+            final Collection<String> keysToRemove = new HashSet<>(Generic.getCollectionCapacity(c));
+            for (final Map.Entry<K, V> entry : entrySetCopy()) {
+                if (c.contains(entry.getValue())) {
+                    keysToRemove.add((String) entry.getKey());
+                } else { // not the value I look for, will continue
+                }
+            }
+            if (keysToRemove.isEmpty()) { // nothing to mark as expired
+            } else {
+                GUI.publicMarkManagedItemsAsExpired(keysToRemove, this.isEventsMap);
+            }
         }
         return super.removeAllValues(c);
     }
@@ -359,20 +374,23 @@ public class ClientStreamSynchronizedMap<K extends Serializable, V extends Seria
     public synchronized boolean retainAllValues(final Collection<?> c) {
         if (this.isEventsMap) {
             GUI.publicRetainValuesEvent((Collection<Event>) c);
-            if (c == null) {
-                logger.error("null collection in retainAllValues isEventsMap for: {}", Generic.objectToString(this));
-            } else {
-                final Collection<String> keysToRemove = new HashSet<>(Generic.getCollectionCapacity(size()));
-                for (final Map.Entry<K, V> entry : entrySetCopy()) {
-                    if (c.contains(entry.getValue())) { // not the value I look for, will continue
-                    } else {
-                        keysToRemove.add((String) entry.getKey());
-                    }
-                }
-                GUI.publicMarkManagedEventsAsExpired(keysToRemove);
-            }
         } else {
             GUI.publicRetainValuesMarket((Collection<MarketCatalogue>) c);
+        }
+        if (c == null) {
+            logger.error("null collection in retainAllValues isEventsMap for: {}", Generic.objectToString(this));
+        } else {
+            final Collection<String> keysToRemove = new HashSet<>(Generic.getCollectionCapacity(size()));
+            for (final Map.Entry<K, V> entry : entrySetCopy()) {
+                if (c.contains(entry.getValue())) { // not the value I look for, will continue
+                } else {
+                    keysToRemove.add((String) entry.getKey());
+                }
+            }
+            if (keysToRemove.isEmpty()) { // nothing to mark as expired
+            } else {
+                GUI.publicMarkManagedItemsAsExpired(keysToRemove, this.isEventsMap);
+            }
         }
         return super.retainAllValues(c);
     }

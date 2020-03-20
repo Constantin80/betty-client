@@ -49,10 +49,10 @@ dependencies {
     implementation group: 'com.google.guava', name: 'guava', version: '28.2-jre'
     implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
     implementation group: 'ch.qos.logback', name: 'logback-core', version: '1.2.3'
-    implementation group: 'org.jetbrains', name: 'annotations', version: '18.0.0'
+    implementation group: 'org.jetbrains', name: 'annotations', version: '19.0.0'
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.9'
-    implementation group: 'org.apache.commons', name: 'commons-collections4', version: '4.3'
-    testImplementation group: 'org.assertj', name: 'assertj-core', version: '3.14.0'
+    implementation group: 'org.apache.commons', name: 'commons-collections4', version: '4.4'
+    testImplementation group: 'org.assertj', name: 'assertj-core', version: '3.15.0'
     testImplementation group: 'com.jayway.awaitility', name: 'awaitility', version: '1.7.0'
     testImplementation('org.junit.jupiter:junit-jupiter-api:5.6.0')
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.6.0"

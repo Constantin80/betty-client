@@ -101,6 +101,24 @@
 -fx-text-fill: yellow;
 }
 
+.dialog-pane {
+-fx-border-color: green;
+-fx-font-size: 18;
+}
+
+.header-panel {
+-fx-background-color: black;
+-fx-border-color: green;
+-fx-border-width: 1;
+-fx-font-size: 14;
+-fx-text-fill: yellow;
+}
+
+.dialog-pane:header .header-panel .label{
+-fx-font-size: 16;
+-fx-font-weight: bold;
+}
+
 #ImportantText{
 -fx-background-color: black;
 -fx-border-color: green;
@@ -131,6 +149,7 @@
 
 .scroll-bar:horizontal, .scroll-bar:vertical{
     -fx-background-color: black;
+    -fx-border-color: teal;
 }
 
 .increment-button, .decrement-button {

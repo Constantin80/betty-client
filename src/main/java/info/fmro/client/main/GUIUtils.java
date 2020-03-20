@@ -9,6 +9,7 @@ import info.fmro.shared.logic.ManagedEvent;
 import info.fmro.shared.logic.ManagedMarket;
 import info.fmro.shared.stream.cache.market.Market;
 import info.fmro.shared.stream.definitions.MarketDefinition;
+import info.fmro.shared.stream.enums.Side;
 import info.fmro.shared.stream.objects.SerializableObjectModification;
 import info.fmro.shared.utility.Formulas;
 import info.fmro.shared.utility.Generic;
@@ -39,7 +40,7 @@ import java.util.regex.Pattern;
 @SuppressWarnings({"UtilityClass", "unused"})
 final class GUIUtils {
     private static final Logger logger = LoggerFactory.getLogger(GUIUtils.class);
-    public static final String MANAGED_EVENT_EXPIRED_MARKER = "zzz ";
+    public static final String EXPIRED_MARKER = "zzz ";
 
     private GUIUtils() {
     }
@@ -54,7 +55,7 @@ final class GUIUtils {
     static String getManagedMarketName(final String marketId, @NotNull final ManagedMarket managedMarket) {
         @Nullable String name = managedMarket.simpleGetMarketName();
         if (name == null) {
-            name = managedMarket.getMarketName(Statics.marketCache, Statics.rulesManager, Statics.marketCataloguesMap);
+            name = managedMarket.getMarketName(Statics.marketCache, Statics.rulesManager, Statics.marketCataloguesMap, Statics.PROGRAM_START_TIME);
             if (name == null) {
                 final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
                 if (marketCatalogue != null) {
@@ -70,7 +71,7 @@ final class GUIUtils {
                 }
 
                 if (name == null) {
-                    final Market market = managedMarket.getMarket(Statics.marketCache, Statics.rulesManager, Statics.marketCataloguesMap);
+                    final Market market = managedMarket.getMarket(Statics.marketCache, Statics.rulesManager, Statics.marketCataloguesMap, Statics.PROGRAM_START_TIME);
                     if (market != null) {
                         final MarketDefinition marketDefinition = market.getMarketDefinition();
                         if (marketDefinition != null) {
@@ -157,16 +158,21 @@ final class GUIUtils {
         return Statics.eventsMap.containsKey(eventId);
     }
 
+    static boolean marketExistsInMap(final String marketId) {
+        return Statics.marketCataloguesMap.containsKey(marketId);
+    }
+
     @Nullable
     static String markNameAsExpired(final String name) {
         @Nullable final String result;
         if (name == null) {
-            logger.error("null name in markNameAsExpired");
+            logger.info("null name in markNameAsExpired");
             result = null;
         } else {
             // logger.error("name already marked as expired: {}", name); // normal behavior, no need to print anything
             result = nameIsMarkedAsExpired(name) ? name : addExpiredMarker(name);
         }
+//        logger.info("expired: {} -> {}", name, result);
         return result;
     }
 
@@ -174,33 +180,34 @@ final class GUIUtils {
     static String markNameAsNotExpired(final String name) {
         @Nullable final String result;
         if (name == null) {
-            logger.error("null name in markNameAsNotExpired");
+            logger.info("null name in markNameAsNotExpired");
             result = null;
         } else {
             if (nameIsMarkedAsExpired(name)) {
                 result = removeExpiredMarker(name);
             } else {
-                logger.error("name not marked as expired in markNameAsNotExpired: {}", name);
+                logger.info("name not marked as expired in markNameAsNotExpired: {}", name);
                 result = name;
             }
         }
+//        logger.info("notExpired: {} -> {}", name, result);
         return result;
     }
 
-    private static boolean nameIsMarkedAsExpired(@NotNull final String name) {
-        return name.startsWith(MANAGED_EVENT_EXPIRED_MARKER);
+    static boolean nameIsMarkedAsExpired(@NotNull final String name) {
+        return name.startsWith(EXPIRED_MARKER);
     }
 
     @NotNull
     @Contract(value = "_ -> new", pure = true)
     private static String addExpiredMarker(@NotNull final String name) {
-        return new String(MANAGED_EVENT_EXPIRED_MARKER + name);
+        return new String(EXPIRED_MARKER + name);
     }
 
     @NotNull
     @Contract("_ -> new")
     private static String removeExpiredMarker(@NotNull final String name) {
-        return new String(name.substring(MANAGED_EVENT_EXPIRED_MARKER.length()));
+        return new String(name.substring(EXPIRED_MARKER.length()));
     }
 
     @SuppressWarnings("FloatingPointEquality")
@@ -235,11 +242,11 @@ final class GUIUtils {
         });
     }
 
-    static <T extends Enum<T>> void setOnKeyPressedTextFieldOdds(@NotNull final TextField textField, @NotNull final AtomicInteger columnIndex, @NotNull final AtomicInteger rowIndex, final double initialValue, final T command,
+    static <T extends Enum<T>> void setOnKeyPressedTextFieldOdds(@NotNull final Side side, @NotNull final TextField textField, @NotNull final AtomicInteger columnIndex, @NotNull final AtomicInteger rowIndex, final double initialValue, final T command,
                                                                  final Serializable... objects) {
         textField.setOnKeyPressed(ae -> {
             if (ae.getCode() == KeyCode.UP) {
-                final double newValue = Formulas.getNextOddsUp(initialValue);
+                final double newValue = Formulas.getNextOddsUp(initialValue, side);
                 //noinspection FloatingPointEquality
                 if (newValue == initialValue) { // nothing changed
                     textField.end();
@@ -250,7 +257,7 @@ final class GUIUtils {
                     Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(command, Generic.concatArrays(objects, new Serializable[]{newValue})));
                 }
             } else if (ae.getCode() == KeyCode.DOWN) {
-                final double newValue = Formulas.getNextOddsDown(initialValue);
+                final double newValue = Formulas.getNextOddsDown(initialValue, side);
                 //noinspection FloatingPointEquality
                 if (newValue == initialValue) { // nothing changed
                 } else {
@@ -260,7 +267,7 @@ final class GUIUtils {
                     Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(command, Generic.concatArrays(objects, new Serializable[]{newValue})));
                 }
             } else if (ae.getCode() == KeyCode.ESCAPE || ae.getCode() == KeyCode.ENTER) {
-                textField.setText(GUI.decimalFormatTextField.format(Formulas.getClosestOdds(initialValue)));
+                textField.setText(GUI.decimalFormatTextField.format(Formulas.getClosestOdds(initialValue, side)));
             } else { // unsupported key, nothing to be done
             }
         });
@@ -282,14 +289,15 @@ final class GUIUtils {
         @SuppressWarnings("OverlyComplexAnonymousInnerClass") final StringConverter<String> converter = new StringConverter<>() {
             @NotNull
             @Override
-            public String fromString(@SuppressWarnings("QuestionableName") @NotNull final String string) {
-                return string.isEmpty() || "-".equals(string) || ".".equals(string) || "-.".equals(string) ? "0" : string;
+            public String fromString(@NotNull final String s) {
+                return s.isEmpty() || "-".equals(s) || ".".equals(s) || "-.".equals(s) ? "0" : s;
             }
 
+            @NotNull
             @Contract(pure = true)
             @Override
-            public String toString(@NotNull final String object) {
-                return object.toString();
+            public String toString(@NotNull final String t) {
+                return t.toString();
             }
         };
 
@@ -330,4 +338,23 @@ final class GUIUtils {
         }
         return returnValue;
     }
+
+//    static <TV> void triggerTreeItemRefresh(final TreeItem<TV> item) {
+//        // TreeView or TreeItem has no 'refresh()', update or redraw method.
+//        // 'setValue' only triggers a refresh of the item if value is different
+//        //
+//        // final TV value = item.getValue();
+//        // item.setValue(null);
+//        // item.setValue(value);
+//
+//        // The API does expose the valueChangedEvent(), so send that
+////        javafx.event.Event.fireEvent(item, new TreeItem.TreeModificationEvent<>(TreeItem.<TV>valueChangedEvent(), item, item.getValue()));
+////        javafx.event.Event.fireEvent(item, new TreeItem.TreeModificationEvent<>(TreeItem.<TV>graphicChangedEvent(), item, item.getValue()));
+////        javafx.event.Event.fireEvent(item, new TreeItem.TreeModificationEvent<>(TreeItem.<TV>branchExpandedEvent(), item, item.getValue()));
+////        javafx.event.Event.fireEvent(item, new TreeItem.TreeModificationEvent<>(TreeItem.<TV>branchCollapsedEvent(), item, item.getValue()));
+////        item.setExpanded(false);
+////        item.setExpanded(true);
+////        final int index = item.getParent().getChildren().indexOf(item);
+////        item.getParent().getChildren().set(index, item);
+//    }
 }

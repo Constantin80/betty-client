@@ -1,6 +1,7 @@
 package info.fmro.client.threads;
 
 import info.fmro.client.main.GUI;
+import info.fmro.client.objects.ClientStreamSynchronizedMap;
 import info.fmro.client.objects.Statics;
 import info.fmro.shared.entities.Event;
 import info.fmro.shared.entities.MarketCatalogue;
@@ -45,6 +46,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 
 @SuppressWarnings({"OverlyComplexClass", "OverlyCoupledClass"})
@@ -141,7 +143,7 @@ public class SSLClientThread
                         if (objectsToModify != null && objectsToModify.length == 1) {
                             if (objectsToModify[0] instanceof String) {
                                 final String eventId = (String) objectsToModify[0];
-                                Statics.rulesManager.removeManagedEvent(eventId);
+                                Statics.rulesManager.removeManagedEvent(eventId, Statics.marketCataloguesMap);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                             }
@@ -168,7 +170,7 @@ public class SSLClientThread
                             if (objectsToModify[0] instanceof String) {
                                 final String marketId = (String) objectsToModify[0];
                                 final String eventId = Formulas.getEventIdOfMarketId(marketId, Statics.marketCataloguesMap);
-                                Statics.rulesManager.removeManagedMarket(marketId);
+                                Statics.rulesManager.removeManagedMarket(marketId, Statics.marketCataloguesMap);
                                 GUI.managedEventUpdated(eventId);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
@@ -182,7 +184,7 @@ public class SSLClientThread
                             if (objectsToModify[0] instanceof String && objectsToModify[1] instanceof Double) {
                                 final String eventId = (String) objectsToModify[0];
                                 final Double newAmount = (Double) objectsToModify[1];
-                                Statics.rulesManager.setEventAmountLimit(eventId, newAmount, Statics.pendingOrdersThread, Statics.orderCache, Statics.existingFunds, Statics.marketCataloguesMap, Statics.marketCache);
+                                Statics.rulesManager.setEventAmountLimit(eventId, newAmount, Statics.pendingOrdersThread, Statics.orderCache, Statics.existingFunds, Statics.marketCataloguesMap, Statics.marketCache, Statics.PROGRAM_START_TIME);
                                 GUI.managedEventUpdated(eventId);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
@@ -197,7 +199,7 @@ public class SSLClientThread
                                 final ManagedRunner managedRunner = (ManagedRunner) objectsToModify[0];
                                 final String marketId = managedRunner.getMarketId();
                                 final String eventId = Formulas.getEventIdOfMarketId(marketId, Statics.marketCataloguesMap);
-                                Statics.rulesManager.addManagedRunner(managedRunner, Statics.marketCataloguesMap, Statics.marketCache, Statics.eventsMap);
+                                Statics.rulesManager.addManagedRunner(managedRunner, Statics.marketCataloguesMap, Statics.marketCache, Statics.eventsMap, Statics.PROGRAM_START_TIME);
                                 GUI.managedMarketUpdated(marketId);
                                 GUI.managedEventUpdated(eventId);
                             } else {
@@ -229,7 +231,7 @@ public class SSLClientThread
                                 final String marketId = (String) objectsToModify[0];
                                 final String eventId = Formulas.getEventIdOfMarketId(marketId, Statics.marketCataloguesMap);
                                 final Double amountLimit = (Double) objectsToModify[1];
-                                Statics.rulesManager.setMarketAmountLimit(marketId, amountLimit);
+                                Statics.rulesManager.setMarketAmountLimit(marketId, amountLimit, Statics.existingFunds);
                                 GUI.managedMarketUpdated(marketId);
                                 GUI.managedEventUpdated(eventId);
                             } else {
@@ -335,6 +337,34 @@ public class SSLClientThread
                             logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                         }
                         break;
+                    case setMarketEnabled:
+                        if (objectsToModify != null && objectsToModify.length == 2) {
+                            if (objectsToModify[0] instanceof String && objectsToModify[1] instanceof Boolean) {
+                                final String marketId = (String) objectsToModify[0];
+                                final Boolean marketEnabled = (Boolean) objectsToModify[1];
+                                Statics.rulesManager.setMarketEnabled(marketId, marketEnabled);
+                                GUI.managedMarketUpdated(marketId);
+                            } else {
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            }
+                        } else {
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        }
+                        break;
+                    case setMarketCalculatedLimit:
+                        if (objectsToModify != null && objectsToModify.length == 2) {
+                            if (objectsToModify[0] instanceof String && objectsToModify[1] instanceof Double) {
+                                final String marketId = (String) objectsToModify[0];
+                                final Double calculatedLimit = (Double) objectsToModify[1];
+                                Statics.rulesManager.setMarketCalculatedLimit(marketId, calculatedLimit, Statics.existingFunds);
+                                GUI.managedMarketUpdated(marketId);
+                            } else {
+                                logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                            }
+                        } else {
+                            logger.error("wrong size objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
+                        }
+                        break;
                     default:
                         logger.error("unknown rulesManagerModificationCommand in runAfterReceive: {} {}", rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
                 } // end switch
@@ -402,14 +432,14 @@ public class SSLClientThread
                     logger.error("improper objectsToModify for SynchronizedMapModificationCommand: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
                 } else {
                     final Class<?> clazz = (Class<?>) objectsToModify[0];
-                    @Nullable final StreamSynchronizedMap<String, Serializable> mapToUse;
+                    @Nullable final ClientStreamSynchronizedMap<String, Serializable> mapToUse;
 
                     if (MarketCatalogue.class.equals(clazz)) {
                         //noinspection rawtypes
-                        mapToUse = (StreamSynchronizedMap) Statics.marketCataloguesMap;
+                        mapToUse = (ClientStreamSynchronizedMap) Statics.marketCataloguesMap;
                     } else if (Event.class.equals(clazz)) {
                         //noinspection rawtypes
-                        mapToUse = (StreamSynchronizedMap) Statics.eventsMap;
+                        mapToUse = (ClientStreamSynchronizedMap) Statics.eventsMap;
                     } else {
                         logger.error("unknown streamSynchronizedMap class in runAfterReceive for: {} {}", clazz, Generic.objectToString(receivedCommand));
                         mapToUse = null;
@@ -433,9 +463,11 @@ public class SSLClientThread
                                         final Serializable value = (Serializable) objectsToModify[2];
                                         if (nObjects == 3) {
                                             mapToUse.put(key, value);
+                                            info.fmro.client.utility.Utils.checkMapValues(mapToUse, Set.of(key));
                                         } else if (nObjects == 4 && objectsToModify[3] instanceof Boolean) {
                                             final boolean b = (boolean) objectsToModify[3];
                                             mapToUse.put(key, value, b);
+                                            info.fmro.client.utility.Utils.checkMapValues(mapToUse, Set.of(key));
                                         } else {
                                             logger.error("wrong inner size or class objectsToModify in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
                                         }
@@ -452,6 +484,7 @@ public class SSLClientThread
                                         final String key = (String) objectsToModify[1];
                                         final Serializable value = (Serializable) objectsToModify[2];
                                         mapToUse.putIfAbsent(key, value);
+                                        info.fmro.client.utility.Utils.checkMapValues(mapToUse, Set.of(key));
                                     } else {
                                         logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
                                     }
@@ -464,6 +497,7 @@ public class SSLClientThread
                                     if (objectsToModify[1] instanceof HashMap) {
                                         @SuppressWarnings("unchecked") final Map<String, Serializable> m = (Map<String, Serializable>) objectsToModify[1];
                                         mapToUse.putAll(m);
+                                        info.fmro.client.utility.Utils.checkMapValues(mapToUse, m.keySet());
                                     } else {
                                         logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), synchronizedMapModificationCommand.name(), Generic.objectToString(receivedCommand));
                                     }
