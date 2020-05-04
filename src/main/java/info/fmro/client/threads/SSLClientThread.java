@@ -61,7 +61,7 @@ public class SSLClientThread
         Generic.closeObjects(this.socket);
     }
 
-    @SuppressWarnings({"OverlyComplexMethod", "OverlyCoupledMethod", "OverlyLongMethod", "OverlyNestedMethod", "ChainOfInstanceofChecks", "SwitchStatementDensity", "unchecked"})
+    @SuppressWarnings({"OverlyComplexMethod", "OverlyCoupledMethod", "OverlyLongMethod", "OverlyNestedMethod", "SwitchStatementDensity", "unchecked", "ChainOfInstanceofChecks"})
     private synchronized void runAfterReceive(@NotNull final StreamObjectInterface receivedCommand) {
         if (receivedCommand instanceof RulesManager) {
             @NotNull final RulesManager rulesManager = (RulesManager) receivedCommand;
@@ -95,7 +95,7 @@ public class SSLClientThread
             }
         } else if (receivedCommand instanceof MarketChangeMessage) {
             @NotNull final MarketChangeMessage marketChangeMessage = (MarketChangeMessage) receivedCommand;
-            Statics.marketCache.onMarketChange(ChangeMessageFactory.ToChangeMessage(-1, marketChangeMessage), Statics.existingFunds.currencyRate);
+            Statics.marketCache.onMarketChange(ChangeMessageFactory.ToChangeMessage(-1, marketChangeMessage), Statics.existingFunds.currencyRate, Statics.rulesManager);
             final HashSet<String> marketIds = marketChangeMessage.getChangedMarketIds();
             if (marketIds == null) { // normal, nothing to be done
             } else {

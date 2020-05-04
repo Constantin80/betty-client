@@ -286,18 +286,19 @@ final class GUIUtils {
             return validEditingState.matcher(text).matches() ? c : null;
         };
 
+        //noinspection QuestionableName
         @SuppressWarnings("OverlyComplexAnonymousInnerClass") final StringConverter<String> converter = new StringConverter<>() {
             @NotNull
             @Override
-            public String fromString(@NotNull final String s) {
-                return s.isEmpty() || "-".equals(s) || ".".equals(s) || "-.".equals(s) ? "0" : s;
+            public String fromString(@NotNull final String string) {
+                return string.isEmpty() || "-".equals(string) || ".".equals(string) || "-.".equals(string) ? "0" : string;
             }
 
             @NotNull
             @Contract(pure = true)
             @Override
-            public String toString(@NotNull final String t) {
-                return t.toString();
+            public String toString(@NotNull final String object) {
+                return object.toString();
             }
         };
 

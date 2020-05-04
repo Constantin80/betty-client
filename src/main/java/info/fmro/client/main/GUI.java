@@ -42,10 +42,12 @@ import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
+import javafx.scene.input.KeyCode;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -99,6 +101,7 @@ public class GUI
     private static final Label reserveLabel = new Label("€ " + decimalFormatLabelLow.format(Statics.existingFunds.getReserve()));
     private static final Label exposureLabel = new Label("€ " + decimalFormatLabelLow.format(Statics.existingFunds.getExposure()));
     private static final SplitPane mainSplitPane = new SplitPane();
+    private static final Collection<String> toBeRemovedEventIds = new HashSet<>(2);
     private static final ObservableList<Node> mainSplitPaneNodesList = mainSplitPane.getItems();
     private static final DualHashBidiMap<String, TreeItem<String>> managedEventsTreeItemMap = new DualHashBidiMap<>(), managedMarketsTreeItemMap = new DualHashBidiMap<>();
     private static final DualHashBidiMap<String, FilterableTreeItem<String>> eventsTreeItemMap = new DualHashBidiMap<>(), marketsTreeItemMap = new DualHashBidiMap<>();
@@ -106,6 +109,7 @@ public class GUI
     private static final FilterableTreeItem<String> rightEventTreeRoot = new FilterableTreeItem<>(null);
     private static final ObservableList<TreeItem<String>> leftEventRootChildrenList = leftEventTreeRoot.getChildren(), rightEventRootChildrenList = rightEventTreeRoot.getInternalChildren();
     private static final GridPane mainGridPane = new GridPane();
+    private static final ScrollPane mainScrollPane = new ScrollPane();
     private static final TreeView<String> leftTreeView = createTreeView(leftEventTreeRoot), rightTreeView = createTreeView(rightEventTreeRoot);
     private static final VBox rightVBox = new VBox(rightTreeView);
     private static final TextField filterTextField = new TextField();
@@ -178,6 +182,8 @@ public class GUI
 //        mainSplitPane.setDividerPosition(0, .09d);
 //        mainSplitPane.setDividerPosition(1, .91d);
         timeline.setCycleCount(Animation.INDEFINITE);
+
+        mainScrollPane.setContent(mainGridPane);
     }
 
     @Override
@@ -645,37 +651,56 @@ public class GUI
         }
     }
 
+    private static void markEventForRemoval(final String eventId) {
+        toBeRemovedEventIds.add(eventId);
+    }
+
+    private static void unMarkEventForRemoval(final String eventId) {
+        toBeRemovedEventIds.remove(eventId);
+    }
+
+    private static void processEventsForRemoval() {
+        for (final String eventId : toBeRemovedEventIds) {
+            removeEvent(eventId);
+        }
+        toBeRemovedEventIds.clear();
+    }
+
     private static void removeEvent(final Event event) {
         final String eventId = event == null ? null : event.getId();
         removeEvent(eventId);
     }
 
     private static void removeEvent(final String eventId) {
-        final TreeItem<String> eventTreeItem = eventsTreeItemMap.get(eventId);
-        @Nullable final ObservableList<TreeItem<String>> listOfChildren = eventTreeItem != null ? eventTreeItem.getChildren() : null;
-        @Nullable final Set<String> toBeReAddedMarketIds;
-        if (listOfChildren != null && !listOfChildren.isEmpty()) {
-            toBeReAddedMarketIds = new HashSet<>(4);
-            for (final TreeItem<String> marketItem : listOfChildren) {
-                final String marketId = marketsTreeItemMap.getKey(marketItem);
-                marketsTreeItemMap.removeValue(marketItem);
-                if (marketId != null) {
-                    toBeReAddedMarketIds.add(marketId);
-                } else {
-                    logger.error("null marketId while building reAdd set in removeEvent for: {} {}", eventId, Generic.objectToString(marketItem));
+        if (rightPanelVisible) {
+            markEventForRemoval(eventId);
+        } else {
+            final TreeItem<String> eventTreeItem = eventsTreeItemMap.get(eventId);
+            @Nullable final ObservableList<TreeItem<String>> listOfChildren = eventTreeItem != null ? eventTreeItem.getChildren() : null;
+            @Nullable final Set<String> toBeReAddedMarketIds;
+            if (listOfChildren != null && !listOfChildren.isEmpty()) {
+                toBeReAddedMarketIds = new HashSet<>(4);
+                for (final TreeItem<String> marketItem : listOfChildren) {
+                    final String marketId = marketsTreeItemMap.getKey(marketItem);
+                    marketsTreeItemMap.removeValue(marketItem);
+                    if (marketId != null) {
+                        toBeReAddedMarketIds.add(marketId);
+                    } else {
+                        logger.error("null marketId while building reAdd set in removeEvent for: {} {}", eventId, Generic.objectToString(marketItem));
+                    }
                 }
+                listOfChildren.clear();
+            } else { // no markets to remove from children
+                toBeReAddedMarketIds = null;
             }
-            listOfChildren.clear();
-        } else { // no markets to remove from children
-            toBeReAddedMarketIds = null;
-        }
-        rightEventRootChildrenList.remove(eventTreeItem);
-        eventsTreeItemMap.remove(eventId);
-        if (toBeReAddedMarketIds != null) { // might be normal
-            for (final String marketId : toBeReAddedMarketIds) {
-                addMarket(marketId);
+            rightEventRootChildrenList.remove(eventTreeItem);
+            eventsTreeItemMap.remove(eventId);
+            if (toBeReAddedMarketIds != null) { // might be normal
+                for (final String marketId : toBeReAddedMarketIds) {
+                    addMarket(marketId);
+                }
+            } else { // this is the normal case, nothing to be reAdded
             }
-        } else { // this is the normal case, nothing to be reAdded
         }
     }
 
@@ -808,6 +833,7 @@ public class GUI
     }
 
     private static void clearRightTreeView() {
+        toBeRemovedEventIds.clear();
         for (final TreeItem<String> treeItem : rightEventRootChildrenList) {
             treeItem.getChildren().clear();
         }
@@ -1115,6 +1141,7 @@ public class GUI
 
     private static int addEvent(final String eventId, final Event event) {
         int modified = 0;
+        unMarkEventForRemoval(eventId);
         if (eventsTreeItemMap.containsKey(eventId)) { // already contained, nothing to be done, won't update the object here
         } else {
             if (event == null) {
@@ -1490,19 +1517,22 @@ public class GUI
     @SuppressWarnings({"ValueOfIncrementOrDecrementUsed", "OverlyLongMethod", "OverlyComplexMethod"})
     private static int showRunner(final String marketId, final RunnerId runnerId, final ManagedRunner managedRunner, final MarketRunner marketRunner, final MarketCatalogue marketCatalogue, final int previousLinesRowIndex, final int runnerRowIndex) {
         final String runnerName = marketCatalogue == null ? null : marketCatalogue.getRunnerName(runnerId);
-        final double backAmountLimit = managedRunner == null ? -1d : managedRunner.getBackAmountLimit();
-        final double layAmountLimit = managedRunner == null ? -1d : managedRunner.getLayAmountLimit();
+        final double backAmountLimit = managedRunner == null ? -1d : managedRunner.simpleGetBackAmountLimit();
+        final double layAmountLimit = managedRunner == null ? -1d : managedRunner.simpleGetLayAmountLimit();
         final double minBackOdds = managedRunner == null ? -1d : managedRunner.getMinBackOdds();
         final double maxLayOdds = managedRunner == null ? -1d : managedRunner.getMaxLayOdds();
         final OrderMarketRunner orderMarketRunner = Statics.orderCache.getOrderMarketRunner(marketId, runnerId);
-        if (orderMarketRunner == null) { // no orderMarketRunner present, which means no orders placed on this runner, normal behavior
+//        if (orderMarketRunner == null) { // no orderMarketRunner present, which means no orders placed on this runner, normal behavior
+//        } else {
+        if (managedRunner == null) { // normal, nothing to be done
         } else {
-            orderMarketRunner.getExposure(managedRunner, Statics.pendingOrdersThread);
+            managedRunner.getExposure(Statics.orderCache, Statics.pendingOrdersThread);
         }
-        final double matchedBackExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getMatchedBackExposure();
-        final double matchedLayExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getMatchedLayExposure();
-        final double totalBackExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getTotalBackExposure();
-        final double totalLayExposure = orderMarketRunner == null ? 0d : orderMarketRunner.getTotalLayExposure();
+//        }
+        final double matchedBackExposure = managedRunner == null ? 0d : managedRunner.getBackMatchedExposure();
+        final double matchedLayExposure = managedRunner == null ? 0d : managedRunner.getLayMatchedExposure();
+        final double totalBackExposure = managedRunner == null ? 0d : managedRunner.getTotalBackExposure();
+        final double totalLayExposure = managedRunner == null ? 0d : managedRunner.getTotalLayExposure();
         final double runnerTotalValueTraded = marketRunner == null ? 0d : marketRunner.getTvEUR(Statics.existingFunds.currencyRate);
         final double lastTradedPrice = marketRunner == null ? 0d : marketRunner.getLtp();
         final TreeMap<Double, Double> availableToLay = marketRunner == null ? null : marketRunner.getAvailableToLay(Statics.existingFunds.currencyRate);
@@ -1523,8 +1553,8 @@ public class GUI
 //        final Label matchedLayExposureLabel = new Label(String.valueOf(matchedLayExposure));
 //        final Label totalBackExposureLabel = new Label(String.valueOf(totalBackExposure));
 //        final Label totalLayExposureLabel = new Label(String.valueOf(totalLayExposure));
-        final Label exposureLabel = new Label("bExp:" + GUIUtils.decimalFormat(totalBackExposure) + "(" + GUIUtils.decimalFormat(matchedBackExposure) + ") lExp:" + GUIUtils.decimalFormat(totalLayExposure) + "(" +
-                                              GUIUtils.decimalFormat(matchedLayExposure) + ")");
+        final Label compositeExposureLabel = new Label("bExp:" + GUIUtils.decimalFormat(totalBackExposure) + "(" + GUIUtils.decimalFormat(matchedBackExposure) + ") lExp:" + GUIUtils.decimalFormat(totalLayExposure) + "(" +
+                                                       GUIUtils.decimalFormat(matchedLayExposure) + ")");
         final Label runnerTotalValueTradedLabel = new Label("tv: €" + GUIUtils.decimalFormat(runnerTotalValueTraded));
         runnerTotalValueTradedLabel.setPadding(new Insets(0, 10, 0, 0));
         final Label lastTradedPriceLabel = new Label("ltp: " + decimalFormatLabelLow.format(lastTradedPrice));
@@ -1611,7 +1641,7 @@ public class GUI
         mainGridPane.add(layAmountLimitNode, columnIndex++, runnerRowIndex);
         mainGridPane.add(lastTradedPriceLabel, columnIndex++, runnerRowIndex);
         mainGridPane.add(runnerTotalValueTradedLabel, columnIndex++, runnerRowIndex);
-        mainGridPane.add(exposureLabel, columnIndex, runnerRowIndex);
+        mainGridPane.add(compositeExposureLabel, columnIndex, runnerRowIndex);
 
         int currentLine = previousLinesRowIndex;
         if (myUnmatchedBack == null) { // nothing to be done
@@ -1807,13 +1837,13 @@ public class GUI
 
     @SuppressWarnings("OverlyLongMethod")
     @Override
-    public void start(@NotNull final Stage stage) {
+    public void start(@NotNull final Stage primaryStage) {
         //noinspection AssignmentToStaticFieldFromInstanceMethod
-        mainStage = stage;
-        stage.setTitle("Betty Interface");
-        stage.setHeight(2160);
-        stage.setWidth(3840);
-        stage.setMaximized(true);
+        mainStage = primaryStage;
+        primaryStage.setTitle("Betty Interface");
+        primaryStage.setHeight(2160);
+        primaryStage.setWidth(3840);
+        primaryStage.setMaximized(true);
 
         @NotNull final ObservableList<Screen> screens = Screen.getScreens();
         final int nScreens = screens.size();
@@ -1825,8 +1855,8 @@ public class GUI
             chosenScreen = Screen.getPrimary();
         }
         @NotNull final Rectangle2D screenBounds = chosenScreen.getBounds();
-        stage.setX(screenBounds.getMinX());
-        stage.setY(screenBounds.getMinY());
+        primaryStage.setX(screenBounds.getMinX());
+        primaryStage.setY(screenBounds.getMinY());
 
         final VBox rootVBox = new VBox();
         final Scene mainScene = new Scene(rootVBox, Color.BLACK);
@@ -1834,13 +1864,13 @@ public class GUI
         mainScene.setCursor(Cursor.CROSSHAIR);
         mainScene.getStylesheets().add("GUI.css");
 
-        stage.setScene(mainScene);
+        primaryStage.setScene(mainScene);
 
         final HBox topBar = new HBox();
         @NotNull final ObservableList<Node> rootNodesList = rootVBox.getChildren(), topBarNodesList = topBar.getChildren();
         rootNodesList.addAll(topBar, mainSplitPane);
         final VBox leftVBox = new VBox(leftTreeView);
-        mainSplitPaneNodesList.addAll(leftVBox, mainGridPane);
+        mainSplitPaneNodesList.addAll(leftVBox, mainScrollPane);
 
         // totalFunds € {} available € {} reserve € {} exposure € {}
         final Label fixedTotalFundsLabel = new Label("Total Funds "), fixedAvailableLabel = new Label(" Available "), fixedReserveLabel = new Label(" out of which safety reserve "), fixedExposureLabel = new Label(" Exposure ");
@@ -1867,11 +1897,11 @@ public class GUI
         rightVBox.getChildren().add(filterTextField);
 
         rightEventTreeRoot.predicateProperty().bind(Bindings.createObjectBinding(() -> {
-            if (filterTextField.getText() == null || filterTextField.getText().isEmpty()) {
-                //noinspection ConstantConditions
+            final String filterText = filterTextField.getText();
+            if (filterText == null || filterText.isEmpty()) {
                 return null;
             }
-            return TreeItemPredicate.create(actor -> StringUtils.containsIgnoreCase(actor.toString(), filterTextField.getText()));
+            return TreeItemPredicate.create(actor -> StringUtils.containsIgnoreCase(actor.toString(), filterText));
         }, filterTextField.textProperty()));
 
         final Button rightPaneButton = new Button("Show _events");
@@ -1880,6 +1910,7 @@ public class GUI
             if (rightPanelVisible) {
                 //noinspection AssignmentToStaticFieldFromInstanceMethod
                 GUI.rightPanelVisible = false;
+                processEventsForRemoval();
 
                 mainSplitPaneNodesList.remove(rightVBox);
                 topBarNodesList.remove(refreshEventsButton);
@@ -1955,6 +1986,13 @@ public class GUI
                     } else {
                         Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(SynchronizedMapModificationCommand.getMarkets, Event.class, event)); // send command to get markets for the selected event
                     }
+                }
+
+                final String filterText = filterTextField.getText();
+                if (filterText == null || filterText.isEmpty()) { // nothing to be done
+                } else {
+                    filterTextField.clear();
+                    rightTreeView.getSelectionModel().select(newValue);
                 }
             }
         });
@@ -2060,7 +2098,19 @@ public class GUI
         rightVBox.setMaxWidth(300);
         SplitPane.setResizableWithParent(rightVBox, false);
         rightTreeView.setPrefHeight(2160);
-        stage.show();
+
+        rootVBox.setOnKeyPressed(event -> {
+            if (event.getCode() == KeyCode.F2) {
+                if (rightPanelVisible) {
+                    filterTextField.requestFocus();
+                    filterTextField.end();
+                } else { // won't focus if the panel is not visible, nothing to be done
+                }
+                event.consume();
+            }
+        });
+
+        primaryStage.show();
 //        mainSplitPane.setDividerPositions(.09, .91);
 //        mainSplitPane.setDividerPosition(0, .09d);
 

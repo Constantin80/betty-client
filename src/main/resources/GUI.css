@@ -28,6 +28,15 @@
 -fx-text-fill: yellow;
 }
 
+.scroll-pane{
+-fx-background: black;
+-fx-background-color: black;
+-fx-border-color: green;
+-fx-border-width: 0;
+-fx-font-size: 14;
+-fx-text-fill: yellow;
+}
+
 .split-pane{
 -fx-background-color: black;
 -fx-border-color: green;

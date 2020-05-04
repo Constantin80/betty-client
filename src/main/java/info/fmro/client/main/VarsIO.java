@@ -25,13 +25,11 @@ public final class VarsIO {
                 try {
                     //noinspection SwitchStatementWithTooFewBranches
                     switch (key) {
-                        case "timeStamps":
+                        case "timeStamps" -> {
                             final TimeStamps timeStamps = (TimeStamps) objectFromFile;
                             Statics.timeStamps.copyFrom(timeStamps);
-                            break;
-                        default:
-                            logger.error("unknown object in the fileNames map: {} {}", key, entry.getValue());
-                            break;
+                        }
+                        default -> logger.error("unknown object in the fileNames map: {} {}", key, entry.getValue());
                     } // end switch
                 } catch (ClassCastException classCastException) { // the object class was probably changed recently
                     logger.error("classCastException while reading objects from files for: {}", key, classCastException);
@@ -52,12 +50,8 @@ public final class VarsIO {
             final String key = entry.getKey();
             //noinspection SwitchStatementWithTooFewBranches
             switch (key) {
-                case "timeStamps":
-                    Generic.synchronizedWriteObjectToFile(Statics.timeStamps, entry.getValue());
-                    break;
-                default:
-                    logger.error("unknown key in the fileNames map: {} {}", key, entry.getValue());
-                    break;
+                case "timeStamps" -> Generic.synchronizedWriteObjectToFile(Statics.timeStamps, entry.getValue());
+                default -> logger.error("unknown key in the fileNames map: {} {}", key, entry.getValue());
             } // end switch
         } // end for
     }

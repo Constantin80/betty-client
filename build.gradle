@@ -8,11 +8,11 @@ plugins {
 group 'info.fmro'
 version '0.1'
 description = "client"
-sourceCompatibility = 13
-targetCompatibility = 13
+sourceCompatibility = 14
+targetCompatibility = 14
 
 javafx {
-    version = "13"
+    version = "14"
     modules = ['javafx.controls']
 }
 
@@ -46,14 +46,14 @@ dependencies {
     implementation group: 'info.fmro', name: 'shared', version: '0.1'
     implementation group: 'org.slf4j', name: 'slf4j-api', version: '1.7.30'
     implementation group: 'org.slf4j', name: 'slf4j-ext', version: '1.7.30'
-    implementation group: 'com.google.guava', name: 'guava', version: '28.2-jre'
+    implementation group: 'com.google.guava', name: 'guava', version: '29.0-jre'
     implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
     implementation group: 'ch.qos.logback', name: 'logback-core', version: '1.2.3'
     implementation group: 'org.jetbrains', name: 'annotations', version: '19.0.0'
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.9'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.10'
     implementation group: 'org.apache.commons', name: 'commons-collections4', version: '4.4'
     testImplementation group: 'org.assertj', name: 'assertj-core', version: '3.15.0'
     testImplementation group: 'com.jayway.awaitility', name: 'awaitility', version: '1.7.0'
-    testImplementation('org.junit.jupiter:junit-jupiter-api:5.6.0')
-    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.6.0"
+    testImplementation('org.junit.jupiter:junit-jupiter-api:5.6.2')
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.6.2"
 }
