@@ -45,6 +45,14 @@
 -fx-text-fill: yellow;
 }
 
+.tree-view{
+-fx-background-color: black;
+-fx-border-color: green;
+-fx-border-width: 0;
+-fx-font-size: 14;
+-fx-text-fill: yellow;
+}
+
 .context-menu{
 -fx-background-color: black;
 -fx-border-color: green;

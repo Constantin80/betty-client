@@ -30,7 +30,7 @@ public final class Utils {
                 logger.warn("trying to recreate existing ManagedEvent for {} {}", eventId, eventName);
             } else {
                 logger.info("client->server create default ManagedEvent for {} {}", eventId, eventName);
-                final ManagedEvent managedEvent = new ManagedEvent(eventId, Statics.eventsMap, Statics.rulesManager);
+                final ManagedEvent managedEvent = new ManagedEvent(eventId, Statics.eventsMap, Statics.rulesManager.markets, Statics.rulesManager.listOfQueues);
                 Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(RulesManagerModificationCommand.addManagedEvent, eventId, managedEvent));
             }
         }
@@ -59,7 +59,8 @@ public final class Utils {
                 logger.warn("trying to recreate existing ManagedMarket for {} {} {} {}", eventId, marketId, eventName, marketName);
             } else {
                 logger.info("client->server create default ManagedMarket for {} {} {} {}", eventId, marketId, eventName, marketName);
-                final ManagedMarket managedMarket = new ManagedMarket(marketId, Statics.marketCache, Statics.rulesManager, Statics.marketCataloguesMap, Statics.PROGRAM_START_TIME);
+                final ManagedMarket managedMarket = new ManagedMarket(marketId, Statics.marketCache.markets, Statics.rulesManager.listOfQueues, Statics.rulesManager.marketsToCheck, Statics.rulesManager.events, Statics.rulesManager.markets,
+                                                                      Statics.rulesManager.rulesHaveChanged, Statics.marketCataloguesMap, Statics.PROGRAM_START_TIME);
                 Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(RulesManagerModificationCommand.addManagedMarket, marketId, managedMarket));
             }
         }

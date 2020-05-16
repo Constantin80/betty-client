@@ -8,7 +8,7 @@ import info.fmro.shared.entities.MarketDescription;
 import info.fmro.shared.enums.RulesManagerModificationCommand;
 import info.fmro.shared.enums.SynchronizedMapModificationCommand;
 import info.fmro.shared.javafx.FilterableTreeItem;
-import info.fmro.shared.javafx.TreeItemPredicate;
+import info.fmro.shared.javafx.ScrollBarState;
 import info.fmro.shared.logic.ManagedEvent;
 import info.fmro.shared.logic.ManagedMarket;
 import info.fmro.shared.logic.ManagedRunner;
@@ -26,11 +26,11 @@ import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Application;
 import javafx.application.Platform;
-import javafx.beans.binding.Bindings;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.Cursor;
 import javafx.scene.Node;
@@ -43,11 +43,13 @@ import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.SelectionModel;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -59,7 +61,6 @@ import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 import org.apache.commons.collections4.bidimap.DualHashBidiMap;
-import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -78,8 +79,10 @@ import java.util.Set;
 import java.util.TimerTask;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 @SuppressWarnings({"ClassWithTooManyMethods", "OverlyComplexClass", "AccessToNonThreadSafeStaticField"})
 public class GUI
@@ -95,13 +98,14 @@ public class GUI
     @SuppressWarnings("StaticVariableMayNotBeInitialized")
     private static Stage mainStage;
     private static final AtomicInteger focusedColumnIndex = new AtomicInteger(-1), focusedRowIndex = new AtomicInteger(-1);
+    private static final AtomicBoolean primaryStageIsShown = new AtomicBoolean(), leftTreeViewInitialized = new AtomicBoolean(), rightTreeViewInitialized = new AtomicBoolean();
     private static final String DEFAULT_EVENT_NAME = "no event attached", NULL_NAME = "null value";
     private static final Label totalFundsLabel = new Label("€ " + decimalFormatLabelLow.format(Statics.existingFunds.getTotalFunds()));
     private static final Label availableLabel = new Label("€ " + decimalFormatLabelLow.format(Statics.existingFunds.getAvailableFunds()));
     private static final Label reserveLabel = new Label("€ " + decimalFormatLabelLow.format(Statics.existingFunds.getReserve()));
     private static final Label exposureLabel = new Label("€ " + decimalFormatLabelLow.format(Statics.existingFunds.getExposure()));
     private static final SplitPane mainSplitPane = new SplitPane();
-    private static final Collection<String> toBeRemovedEventIds = new HashSet<>(2);
+    //    private static final Collection<String> toBeRemovedEventIds = new HashSet<>(2);
     private static final ObservableList<Node> mainSplitPaneNodesList = mainSplitPane.getItems();
     private static final DualHashBidiMap<String, TreeItem<String>> managedEventsTreeItemMap = new DualHashBidiMap<>(), managedMarketsTreeItemMap = new DualHashBidiMap<>();
     private static final DualHashBidiMap<String, FilterableTreeItem<String>> eventsTreeItemMap = new DualHashBidiMap<>(), marketsTreeItemMap = new DualHashBidiMap<>();
@@ -116,7 +120,8 @@ public class GUI
     //    private static final Pattern NUMERIC_PATTERN = Pattern.compile("\\d*");
 //    private static final Pattern NUMERIC_PATTERN = Pattern.compile("[+-]?\\d*\\.?\\d+"); // [+-]?\\d*\\.?\\d+
 //    private static final Pattern NON_NUMERIC_PATTERN = Pattern.compile("[^\\d]");
-    private static boolean rightPanelVisible;
+    @SuppressWarnings("PackageVisibleField")
+    static boolean rightPanelVisible;
     @Nullable
     @SuppressWarnings("RedundantFieldInitialization")
     private static TreeItem<String> currentlyShownManagedObject = null;
@@ -168,6 +173,9 @@ public class GUI
         }
     };
     private static final Timeline timeline = new Timeline(new KeyFrame(Duration.millis(1_000L), liveCounterEventHandler));
+    static final AtomicReference<String> previousFilterValue = new AtomicReference<>();
+//    static final AtomicLong lastFilterChange = new AtomicLong(), lastFilteredItemAddedRemoved = new AtomicLong();
+//    public static final long filterChangeThrottle = 5_000L, filteredAddRemoveThrottle = 2_000L;
 
     static {
         totalFundsLabel.setId("ImportantText");
@@ -651,19 +659,20 @@ public class GUI
         }
     }
 
-    private static void markEventForRemoval(final String eventId) {
-        toBeRemovedEventIds.add(eventId);
+    @SuppressWarnings("unused")
+    private static void markEventForRemoval(@SuppressWarnings("unused") final String eventId) {
+//        toBeRemovedEventIds.add(eventId);
     }
 
-    private static void unMarkEventForRemoval(final String eventId) {
-        toBeRemovedEventIds.remove(eventId);
+    private static void unMarkEventForRemoval(@SuppressWarnings("unused") final String eventId) {
+//        toBeRemovedEventIds.remove(eventId);
     }
 
     private static void processEventsForRemoval() {
-        for (final String eventId : toBeRemovedEventIds) {
-            removeEvent(eventId);
-        }
-        toBeRemovedEventIds.clear();
+//        for (final String eventId : toBeRemovedEventIds) {
+//            removeEvent(eventId);
+//        }
+//        toBeRemovedEventIds.clear();
     }
 
     private static void removeEvent(final Event event) {
@@ -672,40 +681,62 @@ public class GUI
     }
 
     private static void removeEvent(final String eventId) {
-        if (rightPanelVisible) {
-            markEventForRemoval(eventId);
-        } else {
-            final TreeItem<String> eventTreeItem = eventsTreeItemMap.get(eventId);
-            @Nullable final ObservableList<TreeItem<String>> listOfChildren = eventTreeItem != null ? eventTreeItem.getChildren() : null;
-            @Nullable final Set<String> toBeReAddedMarketIds;
-            if (listOfChildren != null && !listOfChildren.isEmpty()) {
-                toBeReAddedMarketIds = new HashSet<>(4);
-                for (final TreeItem<String> marketItem : listOfChildren) {
-                    final String marketId = marketsTreeItemMap.getKey(marketItem);
-                    marketsTreeItemMap.removeValue(marketItem);
-                    if (marketId != null) {
-                        toBeReAddedMarketIds.add(marketId);
-                    } else {
-                        logger.error("null marketId while building reAdd set in removeEvent for: {} {}", eventId, Generic.objectToString(marketItem));
-                    }
+//        if (rightPanelVisible) {
+//        markEventForRemoval(eventId);
+//        } else {
+        final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL);
+        scrollBarState.save(rightTreeViewInitialized.get());
+        final TreeItem<String> eventTreeItem = eventsTreeItemMap.get(eventId);
+        @Nullable final ObservableList<TreeItem<String>> listOfChildren = eventTreeItem != null ? eventTreeItem.getChildren() : null;
+        @Nullable final Set<String> toBeReAddedMarketIds;
+        if (listOfChildren != null && !listOfChildren.isEmpty()) {
+            toBeReAddedMarketIds = new HashSet<>(4);
+            for (final TreeItem<String> marketItem : listOfChildren) {
+                final String marketId = marketsTreeItemMap.getKey(marketItem);
+                marketsTreeItemMap.removeValue(marketItem);
+                if (marketId != null) {
+                    toBeReAddedMarketIds.add(marketId);
+                } else {
+                    logger.error("null marketId while building reAdd set in removeEvent for: {} {}", eventId, Generic.objectToString(marketItem));
                 }
-                listOfChildren.clear();
-            } else { // no markets to remove from children
-                toBeReAddedMarketIds = null;
             }
-            rightEventRootChildrenList.remove(eventTreeItem);
-            eventsTreeItemMap.remove(eventId);
-            if (toBeReAddedMarketIds != null) { // might be normal
-                for (final String marketId : toBeReAddedMarketIds) {
-                    addMarket(marketId);
-                }
-            } else { // this is the normal case, nothing to be reAdded
-            }
+            listOfChildren.clear();
+        } else { // no markets to remove from children
+            toBeReAddedMarketIds = null;
         }
+//            rightEventRootChildrenList.remove(eventTreeItem);
+        synchronizedRemoveRightChild(eventTreeItem, rightEventRootChildrenList);
+        eventsTreeItemMap.remove(eventId);
+        if (toBeReAddedMarketIds != null) { // might be normal
+            for (final String marketId : toBeReAddedMarketIds) {
+                addMarket(marketId);
+            }
+        } else { // this is the normal case, nothing to be reAdded
+        }
+        scrollBarState.restore(rightTreeViewInitialized.get());
+//        }
+    }
+
+    private static void synchronizedRemoveRightChild(final TreeItem<String> treeItem, @SuppressWarnings("TypeMayBeWeakened") @NotNull final ObservableList<TreeItem<String>> rootChildrenList) {
+//        synchronized (GUI.lastFilterChange) {
+//            final long previousFilterSetStamp = GUI.lastFilterChange.get();
+//            final long currentTime = System.currentTimeMillis();
+//            final long timeSinceLastChange = currentTime - previousFilterSetStamp;
+//            final long timeTillWorkIsAllowed = GUI.filterChangeThrottle - timeSinceLastChange;
+//            if (timeTillWorkIsAllowed > 0L) {
+//                Generic.threadSleepSegmented(timeTillWorkIsAllowed, 100L, Statics.mustStop);
+//            } else { // no need to sleep
+//            }
+
+        rootChildrenList.remove(treeItem);
+//            GUI.lastFilteredItemAddedRemoved.set(System.currentTimeMillis());
+//        }
     }
 
     private static void removeManagedEvent(final String eventId, final Iterable<String> marketIds) {
         final TreeItem<String> eventTreeItem = managedEventsTreeItemMap.get(eventId);
+        final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL);
+        scrollBarState.save(leftTreeViewInitialized.get());
         if (marketIds != null) {
             for (final String marketId : marketIds) {
                 removeManagedMarket(marketId, eventTreeItem);
@@ -739,6 +770,7 @@ public class GUI
         } else { // this is the normal case, nothing to be reAdded
         }
         clearMainGridPaneIfDisplaysTreeItem(eventTreeItem);
+        scrollBarState.restore(leftTreeViewInitialized.get());
     }
 
     @SuppressWarnings("UnusedReturnValue")
@@ -748,15 +780,19 @@ public class GUI
     }
 
     private static boolean removeMarket(final String marketId) {
+        final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL);
+        scrollBarState.save(rightTreeViewInitialized.get());
         final TreeItem<String> marketTreeItem = marketsTreeItemMap.remove(marketId);
         final FilterableTreeItem<String> eventTreeItem = marketTreeItem == null ? null : (FilterableTreeItem<String>) marketTreeItem.getParent();
         @Nullable final ObservableList<TreeItem<String>> listOfChildren = eventTreeItem == null ? null : eventTreeItem.getInternalChildren();
         final boolean removed = listOfChildren != null && listOfChildren.remove(marketTreeItem);
         if (removed && eventsTreeItemMap.getKey(eventTreeItem) == null && listOfChildren.isEmpty()) { // parentEventItem is defaultEvent and it no longer has children
             eventsTreeItemMap.removeValue(eventTreeItem);
-            rightEventRootChildrenList.remove(eventTreeItem);
+//            rightEventRootChildrenList.remove(eventTreeItem);
+            synchronizedRemoveRightChild(eventTreeItem, rightEventRootChildrenList);
         } else { // parentEventItem is not defaultEvent, nothing to be done
         }
+        scrollBarState.restore(rightTreeViewInitialized.get());
 
         return removed;
     }
@@ -782,6 +818,8 @@ public class GUI
 //    }
 
     private static boolean removeManagedMarket(final TreeItem<String> marketTreeItem, final TreeItem<String> eventTreeItem) {
+        final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL);
+        scrollBarState.save(leftTreeViewInitialized.get());
         managedMarketsTreeItemMap.removeValue(marketTreeItem);
         @Nullable final ObservableList<TreeItem<String>> parentListOfChildren = eventTreeItem == null ? null : eventTreeItem.getChildren();
         final boolean removed = parentListOfChildren != null && parentListOfChildren.remove(marketTreeItem);
@@ -808,39 +846,48 @@ public class GUI
 //        }
         if (removed) {
             clearMainGridPaneIfDisplaysTreeItem(marketTreeItem);
+            scrollBarState.restore(leftTreeViewInitialized.get());
         } else { // nothing was removed, no need to clear the gridPane
         }
         return removed;
     }
 
     private static void clearLeftTreeView() {
-        for (final TreeItem<String> treeItem : leftEventRootChildrenList) {
+        leftTreeViewInitialized.set(false);
+        final Iterable<TreeItem<String>> listCopy = new ArrayList<>(leftEventRootChildrenList);
+        for (final TreeItem<String> treeItem : listCopy) {
             treeItem.getChildren().clear();
         }
-        leftEventRootChildrenList.clear();
-
-        managedEventsTreeItemMap.clear();
         managedMarketsTreeItemMap.clear();
+
+        leftEventRootChildrenList.clear();
+        managedEventsTreeItemMap.clear();
         clearMainGridPane();
     }
 
     private static void clearMarketsRightTreeView() {
-        for (final TreeItem<String> treeItem : rightEventRootChildrenList) {
-            treeItem.getChildren().clear();
+        final Iterable<TreeItem<String>> listCopy = new ArrayList<>(rightEventRootChildrenList);
+        for (final TreeItem<String> treeItem : listCopy) {
+            if (treeItem == null) {
+                logger.error("null treeItem during clearMarketsRightTreeView");
+            } else if (treeItem instanceof FilterableTreeItem<?>) {
+                final FilterableTreeItem<?> filterableChild = (FilterableTreeItem<?>) treeItem;
+                filterableChild.getInternalChildren().clear();
+            } else {
+                treeItem.getChildren().clear();
+            }
         }
-
         marketsTreeItemMap.clear();
     }
 
-    private static void clearRightTreeView() {
-        toBeRemovedEventIds.clear();
-        for (final TreeItem<String> treeItem : rightEventRootChildrenList) {
-            treeItem.getChildren().clear();
-        }
-        rightEventRootChildrenList.clear();
+    static void clearRightTreeView() {
+        rightTreeViewInitialized.set(false);
+        processEventsForRemoval();
+        clearMarketsRightTreeView();
 
+        rightEventRootChildrenList.clear();
+        rightEventTreeRoot.unbind();
         eventsTreeItemMap.clear();
-        marketsTreeItemMap.clear();
     }
 
     @SuppressWarnings("UnusedReturnValue")
@@ -850,17 +897,27 @@ public class GUI
         clearLeftTreeView();
         modified += addManagedEvents();
         modified += addManagedMarkets();
+        leftTreeViewInitialized.set(true);
 
         return modified;
     }
 
     @SuppressWarnings("UnusedReturnValue")
     private static int initializeRightTreeView() {
+        return initializeRightTreeView(false);
+    }
+
+    @SuppressWarnings("UnusedReturnValue")
+    static int initializeRightTreeView(final boolean alreadyCleared) {
         int modified = 0;
 
-        clearRightTreeView();
+        if (alreadyCleared) { // no need to clear again
+        } else {
+            clearRightTreeView();
+        }
         modified += addEvents();
         modified += addMarkets();
+        rightTreeViewInitialized.set(true);
 
         return modified;
     }
@@ -885,8 +942,11 @@ public class GUI
 
         if (eventTreeRoot == leftEventTreeRoot) {
             initializeLeftTreeView();
-        } else if (eventTreeRoot == rightEventTreeRoot) {
-            initializeRightTreeView();
+        } else if (eventTreeRoot == rightEventTreeRoot) { // no need to initialize, as this is treeView created when the program starts, and the rightPanel is not visible
+            if (rightPanelVisible) {
+                initializeRightTreeView();
+            } else { // no initialize is not visible
+            }
         } else {
             logger.error("unknown treeRoot in createTreeView: {}", Generic.objectToString(eventTreeRoot));
         }
@@ -1019,7 +1079,7 @@ public class GUI
                 final FilterableTreeItem<String> marketTreeItem = new FilterableTreeItem<>(marketName);
 //                marketTreeItem.setExpanded(true);
                 marketsTreeItemMap.put(marketId, marketTreeItem);
-                addTreeItem(marketTreeItem, parentItem);
+                addTreeItem(marketTreeItem, parentItem, rightTreeView);
                 modified++;
             }
         }
@@ -1048,7 +1108,7 @@ public class GUI
             final String eventId = managedMarket.getParentEventId(Statics.marketCataloguesMap, Statics.rulesManager.rulesHaveChanged);
             final TreeItem<String> parentEventTreeItem = managedEventsTreeItemMap.get(eventId);
 //            logger.info("updateManagedMarket: {} {} {}", id, eventId, parentEventTreeItem);
-            final ManagedEvent managedEvent = managedMarket.getParentEvent(Statics.marketCataloguesMap, Statics.rulesManager);
+            final ManagedEvent managedEvent = managedMarket.getParentEvent(Statics.marketCataloguesMap, Statics.rulesManager.events, Statics.rulesManager.markets, Statics.rulesManager.rulesHaveChanged);
 //            logger.info("updateManagedMarket: {} {}", id, managedEvent == null ? null : managedEvent.getId());
             if (parentEventTreeItem == null || managedEvent == null) { // no parentEvent present or found, nothing to be done
             } else {
@@ -1090,7 +1150,7 @@ public class GUI
                 final TreeItem<String> marketTreeItem = new TreeItem<>(marketName);
                 marketTreeItem.setExpanded(true);
                 managedMarketsTreeItemMap.put(marketId, marketTreeItem);
-                addTreeItem(marketTreeItem, parentItem);
+                addTreeItem(marketTreeItem, parentItem, leftTreeView);
                 modified++;
             }
         }
@@ -1105,7 +1165,7 @@ public class GUI
             defaultEvent = new FilterableTreeItem<>(DEFAULT_EVENT_NAME);
             defaultEvent.setExpanded(true);
             eventsTreeItemMap.put(null, defaultEvent);
-            addTreeItem(defaultEvent, rightEventRootChildrenList);
+            addTreeItem(defaultEvent, rightEventRootChildrenList, rightTreeView, true);
         } else { // I have the defaultEvent, nothing more to be done
         }
         return defaultEvent;
@@ -1118,7 +1178,7 @@ public class GUI
             defaultEvent = new TreeItem<>(DEFAULT_EVENT_NAME);
             defaultEvent.setExpanded(true);
             managedEventsTreeItemMap.put(null, defaultEvent);
-            addTreeItem(defaultEvent, leftEventRootChildrenList);
+            addTreeItem(defaultEvent, leftEventRootChildrenList, leftTreeView, false);
         } else { // I have the defaultEvent, nothing more to be done
         }
         return defaultEvent;
@@ -1154,7 +1214,7 @@ public class GUI
                 eventsTreeItemMap.put(eventId, eventTreeItem);
                 if (Statics.unsupportedEventNames.contains(eventName)) { // won't add eventTreeItem to the treeView
                 } else {
-                    addTreeItem(eventTreeItem, rightEventRootChildrenList);
+                    addTreeItem(eventTreeItem, rightEventRootChildrenList, rightTreeView, true);
                 }
 
                 modified += checkMarketsOnDefaultNode(event, eventTreeItem);
@@ -1255,7 +1315,7 @@ public class GUI
                 eventTreeItem.setExpanded(true);
                 managedEventsTreeItemMap.put(eventId, eventTreeItem);
 
-                addTreeItem(eventTreeItem, leftEventRootChildrenList);
+                addTreeItem(eventTreeItem, leftEventRootChildrenList, leftTreeView, false);
                 modified += checkManagedMarketsOnDefaultNode(managedEvent, eventTreeItem);
                 modified++;
             }
@@ -1288,14 +1348,16 @@ public class GUI
                 }
             }
             for (final TreeItem<String> marketTreeItem : marketsToMove) {
-                defaultChildrenList.remove(marketTreeItem);
-                addTreeItem(marketTreeItem, eventTreeItem);
+//                defaultChildrenList.remove(marketTreeItem);
+                synchronizedRemoveRightChild(marketTreeItem, defaultChildrenList);
+                addTreeItem(marketTreeItem, eventTreeItem, rightTreeView);
                 modified++;
             }
 
             final int defaultChildrenRemaining = defaultChildrenList.size();
             if (defaultChildrenRemaining == 0) {
-                rightEventRootChildrenList.remove(defaultEvent);
+//                rightEventRootChildrenList.remove(defaultEvent);
+                synchronizedRemoveRightChild(defaultEvent, rightEventRootChildrenList);
                 eventsTreeItemMap.remove(null);
             }
         } else { // no defaultEvent, nothing to check
@@ -1307,7 +1369,7 @@ public class GUI
         int modified = 0;
         final TreeItem<String> defaultEvent = managedEventsTreeItemMap.get(null);
         if (defaultEvent != null) {
-            @NotNull final HashMap<String, ManagedMarket> marketsMap = managedEvent.marketsMap.copy(Statics.rulesManager);
+            @NotNull final HashMap<String, ManagedMarket> marketsMap = managedEvent.marketsMap.copy(Statics.rulesManager.markets);
             final int nMarkets = marketsMap.size();
             if (nMarkets > 0) {
                 @NotNull final ObservableList<TreeItem<String>> defaultChildrenList = defaultEvent.getChildren();
@@ -1321,7 +1383,7 @@ public class GUI
                 }
                 for (final TreeItem<String> marketTreeItem : marketsToMove) {
                     defaultChildrenList.remove(marketTreeItem);
-                    addTreeItem(marketTreeItem, eventTreeItem);
+                    addTreeItem(marketTreeItem, eventTreeItem, leftTreeView);
                     modified++;
                 }
 
@@ -1339,7 +1401,7 @@ public class GUI
 
     private static void reorderManagedEventItem(@NotNull final TreeItem<String> eventItem) {
         leftEventRootChildrenList.remove(eventItem);
-        addTreeItem(eventItem, leftEventRootChildrenList);
+        addTreeItem(eventItem, leftEventRootChildrenList, leftTreeView, false);
     }
 
     private static void reorderManagedMarketItem(@NotNull final TreeItem<String> marketItem) {
@@ -1349,36 +1411,95 @@ public class GUI
         } else {
             @NotNull final ObservableList<TreeItem<String>> parentChildren = parent.getChildren();
             parentChildren.remove(marketItem);
-            addTreeItem(marketItem, parentChildren);
+            addTreeItem(marketItem, parentChildren, leftTreeView, false);
         }
     }
 
     @SuppressWarnings("OverloadedMethodsWithSameNumberOfParameters")
-    private static void addTreeItem(@NotNull final TreeItem<String> treeItem, @NotNull final TreeItem<String> root) {
+    private static void addTreeItem(@NotNull final TreeItem<String> treeItem, @NotNull final TreeItem<String> root, @NotNull final TreeView<String> treeView) {
         @NotNull final ObservableList<TreeItem<String>> rootChildrenList = root.getChildren();
-        addTreeItem(treeItem, rootChildrenList);
+        addTreeItem(treeItem, rootChildrenList, treeView, false);
     }
 
     @SuppressWarnings("OverloadedMethodsWithSameNumberOfParameters")
-    private static void addTreeItem(@NotNull final TreeItem<String> treeItem, @NotNull final FilterableTreeItem<String> root) {
+    private static void addTreeItem(@NotNull final TreeItem<String> treeItem, @NotNull final FilterableTreeItem<String> root, @NotNull final TreeView<String> treeView) {
         @NotNull final ObservableList<TreeItem<String>> rootChildrenList = root.getInternalChildren();
-        addTreeItem(treeItem, rootChildrenList);
+        addTreeItem(treeItem, rootChildrenList, treeView, true);
     }
 
-    private static void addTreeItem(@NotNull final TreeItem<String> treeItem, @NotNull final ObservableList<TreeItem<String>> rootChildrenList) {
+    private static void addTreeItem(@NotNull final TreeItem<String> treeItem, @NotNull final ObservableList<TreeItem<String>> rootChildrenList, @NotNull final TreeView<String> treeView, final boolean isRightTree) {
         final int size = rootChildrenList.size();
         boolean added = false;
+        final ScrollBarState scrollBarState;
+        if (isRightTree) {
+            scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL);
+            scrollBarState.save(rightTreeViewInitialized.get());
+        } else {
+            scrollBarState = new ScrollBarState(leftTreeView, Orientation.VERTICAL);
+            scrollBarState.save(leftTreeViewInitialized.get());
+        }
         for (int i = 0; i < size; i++) {
             if (treeItemCompare(rootChildrenList.get(i), treeItem) >= 0) {
-                rootChildrenList.add(i, treeItem);
+                synchronizedAddRootChild(treeItem, rootChildrenList, i, treeView);
+//                rootChildrenList.add(i, treeItem);
                 added = true;
                 break;
             } else { // will continue, nothing to be done yet
             }
         }
         if (added) { // added, nothing to be done
+        } else { // placed at the end of the list
+            synchronizedAddRootChild(treeItem, rootChildrenList, treeView);
+//            rootChildrenList.add(treeItem);
+        }
+        final SelectionModel<TreeItem<String>> selectionModel = treeView.getSelectionModel();
+        final TreeItem<String> selectedItem = selectionModel.getSelectedItem();
+        final TreeItem<String> parentItem = treeItem.getParent();
+        if (parentItem == selectedItem) {
+            treeView.scrollTo(selectionModel.getSelectedIndex());
+        } else { // no need to scroll
+            if (isRightTree) {
+                scrollBarState.restore(rightTreeViewInitialized.get());
+            } else {
+                scrollBarState.restore(leftTreeViewInitialized.get());
+            }
+        }
+    }
+
+    private static void synchronizedAddRootChild(@NotNull final TreeItem<String> treeItem, @NotNull final ObservableList<TreeItem<String>> rootChildrenList, @NotNull final TreeView<String> treeView) {
+        synchronizedAddRootChild(treeItem, rootChildrenList, -1, treeView);
+    }
+
+    private static void synchronizedAddRootChild(@NotNull final TreeItem<String> treeItem, @NotNull final ObservableList<TreeItem<String>> rootChildrenList, final int position, @NotNull final TreeView<String> treeView) {
+        //noinspection IfStatementWithIdenticalBranches
+        if (treeView == rightTreeView) {
+//            synchronized (GUI.lastFilterChange) {
+//                final long previousFilterSetStamp = GUI.lastFilterChange.get();
+//                final long currentTime = System.currentTimeMillis();
+//                final long timeSinceLastChange = currentTime - previousFilterSetStamp;
+//                final long timeTillWorkIsAllowed = GUI.filterChangeThrottle - timeSinceLastChange;
+//                if (timeTillWorkIsAllowed > 0L) {
+//                    Generic.threadSleepSegmented(timeTillWorkIsAllowed, 100L, Statics.mustStop);
+//                } else { // no need to sleep
+//                }
+
+            simpleAddRootChild(treeItem, rootChildrenList, position);
+//                GUI.lastFilteredItemAddedRemoved.set(System.currentTimeMillis());
+//            }
         } else {
-            rootChildrenList.add(treeItem); // placed at the end of the list
+            simpleAddRootChild(treeItem, rootChildrenList, position);
+        }
+    }
+
+//    private static void simpleAddRootChild(@NotNull final TreeItem<String> treeItem, @NotNull final ObservableList<TreeItem<String>> rootChildrenList) {
+//        simpleAddRootChild(treeItem, rootChildrenList, -1);
+//    }
+
+    private static void simpleAddRootChild(@NotNull final TreeItem<String> treeItem, @SuppressWarnings({"BoundedWildcard", "TypeMayBeWeakened"}) @NotNull final ObservableList<TreeItem<String>> rootChildrenList, final int position) {
+        if (position >= 0) {
+            rootChildrenList.add(position, treeItem);
+        } else {
+            rootChildrenList.add(treeItem);
         }
     }
 
@@ -1526,7 +1647,7 @@ public class GUI
 //        } else {
         if (managedRunner == null) { // normal, nothing to be done
         } else {
-            managedRunner.getExposure(Statics.orderCache, Statics.pendingOrdersThread);
+            managedRunner.getExposure(Statics.orderCache.markets, Statics.pendingOrdersThread);
         }
 //        }
         final double matchedBackExposure = managedRunner == null ? 0d : managedRunner.getBackMatchedExposure();
@@ -1835,9 +1956,11 @@ public class GUI
         }
     }
 
-    @SuppressWarnings("OverlyLongMethod")
+    @SuppressWarnings({"OverlyLongMethod", "OverlyComplexMethod"})
     @Override
     public void start(@NotNull final Stage primaryStage) {
+        primaryStage.setOnShown(event -> primaryStageIsShown.set(true));
+
         //noinspection AssignmentToStaticFieldFromInstanceMethod
         mainStage = primaryStage;
         primaryStage.setTitle("Betty Interface");
@@ -1894,15 +2017,33 @@ public class GUI
 
         filterTextField.setPromptText("Enter filter text ...");
         filterTextField.setStyle("-fx-background-color: black;");
+        GUIUtils.setOnKeyPressedFilterTextField(filterTextField, rightEventTreeRoot);
         rightVBox.getChildren().add(filterTextField);
 
-        rightEventTreeRoot.predicateProperty().bind(Bindings.createObjectBinding(() -> {
-            final String filterText = filterTextField.getText();
-            if (filterText == null || filterText.isEmpty()) {
-                return null;
+//        rightEventTreeRoot.predicateProperty().bind(Bindings.createObjectBinding(() -> {
+//            final String filterText = filterTextField.getText();
+//            if (filterText == null || filterText.isEmpty()) {
+//                return null;
+//            }
+//            return TreeItemPredicate.create(actor -> StringUtils.containsIgnoreCase(actor.toString(), filterText));
+//        }, filterTextField.textProperty()));
+
+//        GUIUtils.setFilterPredicate(filterTextField, rightEventTreeRoot);
+
+
+
+/*
+        // Important to set the Predicate after first populate - otherwise tree is initially empty
+        (root as FilterableTreeItem<Actor>).predicateProperty().bind(Bindings.createObjectBinding(Callable {
+            if (filterField.text == null || filterField.text.isEmpty()) return@Callable null
+                    else Predicate { actor: Actor ->
+                    actor.displayName.contains(
+                            filterField.text.trim(),
+                            ignoreCase = true
+                    )
             }
-            return TreeItemPredicate.create(actor -> StringUtils.containsIgnoreCase(actor.toString(), filterText));
-        }, filterTextField.textProperty()));
+        }, filterField.textProperty()))
+*/
 
         final Button rightPaneButton = new Button("Show _events");
         rightPaneButton.setMnemonicParsing(true);
@@ -1964,13 +2105,14 @@ public class GUI
 //        });
 
         rightTreeView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
-            if (newValue == null) {
-                logger.info("likely not clicked on a tree member, null newValue in rightTreeView addListener, oldValue: {}", oldValue);
+            if (newValue == null) { // not needed to fill the logs; if the treeView doesn't fill all the height, and I click somewhere below, where there are no members, this error appears every time
+//                logger.info("likely not clicked on a tree member, null newValue in rightTreeView addListener, oldValue: {}", oldValue);
             } else {
                 newValue.setExpanded(true);
                 final String eventId = eventsTreeItemMap.getKey(newValue);
+                @Nullable final String marketId;
                 if (eventId == null) {
-                    final String marketId = marketsTreeItemMap.getKey(newValue);
+                    marketId = marketsTreeItemMap.getKey(newValue);
                     if (marketId == null) {
                         if (Objects.equals(newValue.getValue(), DEFAULT_EVENT_NAME)) { // I have clicked the default event, normal behavior, nothing to be done
                         } else {
@@ -1980,6 +2122,7 @@ public class GUI
                         Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(SynchronizedMapModificationCommand.getMarkets, MarketCatalogue.class, marketId)); // send command to refresh market
                     }
                 } else {
+                    marketId = null;
                     final Event event = Statics.eventsMap.get(eventId);
                     if (event == null) {
                         logger.error("null event for eventId {} in selected right treeItem: {}", eventId, newValue);
@@ -1987,12 +2130,35 @@ public class GUI
                         Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(SynchronizedMapModificationCommand.getMarkets, Event.class, event)); // send command to get markets for the selected event
                     }
                 }
-
-                final String filterText = filterTextField.getText();
-                if (filterText == null || filterText.isEmpty()) { // nothing to be done
+//                Generic.threadSleepSegmented(1_000L, 100L, Statics.mustStop);
+                final String filterTextValue = filterTextField.getText();
+                if (filterTextValue == null || filterTextValue.isEmpty()) { // nothing to be done
                 } else {
+//                    filterTextField.requestFocus();
+//                    filterTextField.end();
+//                    while (!filterTextField.getText().isEmpty()) {
+////                        filterTextField.deletePreviousChar();
+//                        final KeyEvent pressBackSpace = new KeyEvent(null, filterTextField, KeyEvent.KEY_PRESSED, "", "", KeyCode.BACK_SPACE, false, false, false, false);
+//                        filterTextField.fireEvent(pressBackSpace);
+//                    }
+
                     filterTextField.clear();
-                    rightTreeView.getSelectionModel().select(newValue);
+                    GUIUtils.setFilterPredicate(filterTextField, rightEventTreeRoot);
+
+                    @Nullable final TreeItem<String> selectedItem;
+                    if (eventId == null) {
+                        if (marketId == null) {
+                            selectedItem = null; // error message was printed previously
+                        } else {
+                            selectedItem = marketsTreeItemMap.get(marketId);
+                        }
+                    } else {
+                        selectedItem = eventsTreeItemMap.get(eventId);
+                    }
+
+                    final SelectionModel<TreeItem<String>> selectionModel = rightTreeView.getSelectionModel();
+                    selectionModel.select(selectedItem);
+                    rightTreeView.scrollTo(selectionModel.getSelectedIndex());
                 }
             }
         });
@@ -2023,16 +2189,47 @@ public class GUI
                 Statics.threadPoolExecutor.submit(() -> Utils.createManagedMarket(marketId, eventId));
             }
         });
-        final ContextMenu rightContextMenu = new ContextMenu(entryRight1);
+        final MenuItem entryRight2 = new MenuItem("Object in Browser");
+        entryRight2.setOnAction(ae -> {
+            @NotNull final TreeItem<String> treeItem = rightTreeView.getSelectionModel().getSelectedItem();
+            final String marketId = marketsTreeItemMap.getKey(treeItem);
+            final TreeItem<String> parentNode = treeItem.getParent();
+            if (marketId == null) {
+                final String eventId = eventsTreeItemMap.getKey(treeItem);
+                if (eventId == null) {
+                    if (Objects.equals(treeItem.getValue(), DEFAULT_EVENT_NAME)) { // I have clicked the default event, normal behavior, nothing to be done
+                    } else {
+                        logger.error("null marketId and eventId in entryRight for: {} {} {}", Objects.equals(parentNode, rightEventTreeRoot), treeItem, parentNode);
+                    }
+                } else {
+                    final String webLink = "https://www.betfair.ro/exchange/plus/football/event/" + eventId;
+                    getInstance().getHostServices().showDocument(webLink);
+                }
+            } else {
+//                @Nullable final String eventId;
+                if (parentNode == null) {
+                    logger.error("null parentNode in entryRight for marketId {} treeItem: {}", marketId, treeItem);
+//                    eventId = null;
+                } else { // no error
+//                    eventId = eventsTreeItemMap.getKey(parentNode);
+                }
+                final String webLink = "https://www.betfair.ro/exchange/plus/market/" + marketId;
+                getInstance().getHostServices().showDocument(webLink);
+            }
+        });
+        final ContextMenu rightContextMenu = new ContextMenu(entryRight1, entryRight2);
         rightContextMenu.setOnShowing(ae -> {
             @NotNull final TreeItem<String> treeItem = rightTreeView.getSelectionModel().getSelectedItem();
             if (marketsTreeItemMap.containsValue(treeItem)) {
                 entryRight1.setText("Add Managed Market");
+                entryRight2.setText("Market in Browser");
             } else if (eventsTreeItemMap.containsValue(treeItem)) {
                 entryRight1.setText("Add Managed Event");
+                entryRight2.setText("Event in Browser");
             } else {
                 logger.error("treeItem not contained in markets nor events maps in rightContextMenu: {} {}", treeItem, treeItem == null ? null : treeItem.getParent());
                 entryRight1.setText("Add Managed Object");
+                entryRight2.setText("Object in Browser");
             }
         });
         rightTreeView.setContextMenu(rightContextMenu);
@@ -2071,8 +2268,8 @@ public class GUI
         leftTreeView.setContextMenu(leftContextMenu);
 
         leftTreeView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
-            if (newValue == null) {
-                logger.info("likely not clicked on a tree member, null newValue in leftTreeView addListener, oldValue: {}", oldValue);
+            if (newValue == null) { // not needed to fill the logs; if the treeView doesn't fill all the height, and I click somewhere below, where there are no members, this error appears every time
+//                logger.info("likely not clicked on a tree member, null newValue in leftTreeView addListener, oldValue: {}", oldValue);
             } else {
                 newValue.setExpanded(true);
                 final String eventId = managedEventsTreeItemMap.getKey(newValue);
@@ -2099,16 +2296,28 @@ public class GUI
         SplitPane.setResizableWithParent(rightVBox, false);
         rightTreeView.setPrefHeight(2160);
 
-        rootVBox.setOnKeyPressed(event -> {
+        mainScene.addEventFilter(KeyEvent.KEY_PRESSED, (KeyEvent event) -> {
+            // key pressed
             if (event.getCode() == KeyCode.F2) {
                 if (rightPanelVisible) {
                     filterTextField.requestFocus();
                     filterTextField.end();
                 } else { // won't focus if the panel is not visible, nothing to be done
                 }
-                event.consume();
+//                event.consume();
             }
         });
+
+//        mainScene.setOnKeyPressed(event -> {
+//            if (event.getCode() == KeyCode.F2) {
+//                if (rightPanelVisible) {
+//                    filterTextField.requestFocus();
+//                    filterTextField.end();
+//                } else { // won't focus if the panel is not visible, nothing to be done
+//                }
+//                event.consume();
+//            }
+//        });
 
         primaryStage.show();
 //        mainSplitPane.setDividerPositions(.09, .91);

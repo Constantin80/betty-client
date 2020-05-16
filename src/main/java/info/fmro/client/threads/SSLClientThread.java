@@ -95,7 +95,8 @@ public class SSLClientThread
             }
         } else if (receivedCommand instanceof MarketChangeMessage) {
             @NotNull final MarketChangeMessage marketChangeMessage = (MarketChangeMessage) receivedCommand;
-            Statics.marketCache.onMarketChange(ChangeMessageFactory.ToChangeMessage(-1, marketChangeMessage), Statics.existingFunds.currencyRate, Statics.rulesManager);
+            Statics.marketCache.onMarketChange(ChangeMessageFactory.ToChangeMessage(-1, marketChangeMessage), Statics.existingFunds.currencyRate, Statics.rulesManager.listOfQueues, Statics.rulesManager.marketsToCheck, Statics.rulesManager.events,
+                                               Statics.rulesManager.markets, Statics.rulesManager.rulesHaveChanged, Statics.marketCataloguesMap, Statics.PROGRAM_START_TIME);
             final HashSet<String> marketIds = marketChangeMessage.getChangedMarketIds();
             if (marketIds == null) { // normal, nothing to be done
             } else {
@@ -108,7 +109,8 @@ public class SSLClientThread
         } else if (receivedCommand instanceof OrderChangeMessage) {
             @NotNull final OrderChangeMessage orderChangeMessage = (OrderChangeMessage) receivedCommand;
             Statics.orderCache.onOrderChange(ChangeMessageFactory.ToChangeMessage(-1, orderChangeMessage), Statics.rulesManager.orderCacheHasReset, Statics.rulesManager.newOrderMarketCreated, Statics.pendingOrdersThread,
-                                             Statics.existingFunds.currencyRate);
+                                             Statics.existingFunds.currencyRate, Statics.marketCache.markets, Statics.rulesManager.listOfQueues, Statics.rulesManager.marketsToCheck, Statics.rulesManager.events, Statics.rulesManager.markets,
+                                             Statics.rulesManager.rulesHaveChanged, Statics.marketCataloguesMap, Statics.PROGRAM_START_TIME);
             final HashSet<String> marketIds = orderChangeMessage.getChangedMarketIds();
             if (marketIds == null) { // normal, nothing to be done
             } else {
@@ -184,7 +186,8 @@ public class SSLClientThread
                             if (objectsToModify[0] instanceof String && objectsToModify[1] instanceof Double) {
                                 final String eventId = (String) objectsToModify[0];
                                 final Double newAmount = (Double) objectsToModify[1];
-                                Statics.rulesManager.setEventAmountLimit(eventId, newAmount, Statics.pendingOrdersThread, Statics.orderCache, Statics.existingFunds, Statics.marketCataloguesMap, Statics.marketCache, Statics.PROGRAM_START_TIME);
+                                Statics.rulesManager.setEventAmountLimit(eventId, newAmount, Statics.pendingOrdersThread, Statics.orderCache.markets, Statics.existingFunds, Statics.marketCataloguesMap, Statics.marketCache.markets,
+                                                                         Statics.PROGRAM_START_TIME);
                                 GUI.managedEventUpdated(eventId);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));
@@ -199,7 +202,7 @@ public class SSLClientThread
                                 final ManagedRunner managedRunner = (ManagedRunner) objectsToModify[0];
                                 final String marketId = managedRunner.getMarketId();
                                 final String eventId = Formulas.getEventIdOfMarketId(marketId, Statics.marketCataloguesMap);
-                                Statics.rulesManager.addManagedRunner(managedRunner, Statics.marketCataloguesMap, Statics.marketCache, Statics.eventsMap, Statics.PROGRAM_START_TIME);
+                                Statics.rulesManager.addManagedRunner(managedRunner, Statics.marketCataloguesMap, Statics.marketCache.markets, Statics.eventsMap, Statics.PROGRAM_START_TIME);
                                 GUI.managedMarketUpdated(marketId);
                                 GUI.managedEventUpdated(eventId);
                             } else {

@@ -5,6 +5,8 @@ import info.fmro.shared.entities.Event;
 import info.fmro.shared.entities.MarketCatalogue;
 import info.fmro.shared.entities.MarketDescription;
 import info.fmro.shared.enums.RulesManagerModificationCommand;
+import info.fmro.shared.javafx.FilterableTreeItem;
+import info.fmro.shared.javafx.TreeItemPredicate;
 import info.fmro.shared.logic.ManagedEvent;
 import info.fmro.shared.logic.ManagedMarket;
 import info.fmro.shared.stream.cache.market.Market;
@@ -23,6 +25,7 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.layout.GridPane;
 import javafx.scene.text.TextAlignment;
 import javafx.util.StringConverter;
+import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -47,7 +50,7 @@ final class GUIUtils {
 
     @Nullable
     static String getManagedMarketName(@NotNull final ManagedMarket managedMarket) {
-        final String marketId = managedMarket.getId();
+        final String marketId = managedMarket.getMarketId();
         return getManagedMarketName(marketId, managedMarket);
     }
 
@@ -55,7 +58,8 @@ final class GUIUtils {
     static String getManagedMarketName(final String marketId, @NotNull final ManagedMarket managedMarket) {
         @Nullable String name = managedMarket.simpleGetMarketName();
         if (name == null) {
-            name = managedMarket.getMarketName(Statics.marketCache, Statics.rulesManager, Statics.marketCataloguesMap, Statics.PROGRAM_START_TIME);
+            name = managedMarket.getMarketName(Statics.marketCache.markets, Statics.rulesManager.listOfQueues, Statics.rulesManager.marketsToCheck, Statics.rulesManager.events, Statics.rulesManager.markets, Statics.rulesManager.rulesHaveChanged,
+                                               Statics.marketCataloguesMap, Statics.PROGRAM_START_TIME);
             if (name == null) {
                 final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
                 if (marketCatalogue != null) {
@@ -71,7 +75,8 @@ final class GUIUtils {
                 }
 
                 if (name == null) {
-                    final Market market = managedMarket.getMarket(Statics.marketCache, Statics.rulesManager, Statics.marketCataloguesMap, Statics.PROGRAM_START_TIME);
+                    final Market market = managedMarket.getMarket(Statics.marketCache.markets, Statics.rulesManager.listOfQueues, Statics.rulesManager.marketsToCheck, Statics.rulesManager.events, Statics.rulesManager.markets,
+                                                                  Statics.rulesManager.rulesHaveChanged, Statics.marketCataloguesMap, Statics.PROGRAM_START_TIME);
                     if (market != null) {
                         final MarketDefinition marketDefinition = market.getMarketDefinition();
                         if (marketDefinition != null) {
@@ -96,7 +101,7 @@ final class GUIUtils {
     static String getManagedEventName(@NotNull final ManagedEvent managedEvent) {
         @Nullable String name = managedEvent.simpleGetEventName();
         if (name == null) {
-            name = managedEvent.getEventName(Statics.eventsMap, Statics.rulesManager);
+            name = managedEvent.getEventName(Statics.eventsMap, Statics.rulesManager.listOfQueues);
             final String eventId = managedEvent.getId();
             if (name == null) {
                 @NotNull final HashSet<String> marketIds = managedEvent.marketIds.copy();
@@ -208,6 +213,51 @@ final class GUIUtils {
     @Contract("_ -> new")
     private static String removeExpiredMarker(@NotNull final String name) {
         return new String(name.substring(EXPIRED_MARKER.length()));
+    }
+
+    static void setFilterPredicate(@NotNull final TextField textField, @NotNull final FilterableTreeItem<String> eventTreeRoot) {
+        final String filterText = textField.getText();
+        final String previousFilterValue = GUI.previousFilterValue.getAndSet(filterText);
+        if (Objects.equals(filterText, previousFilterValue)) { // won't change the predicate to the same value, nothing to be done
+        } else {
+//            synchronized (GUI.lastFilterChange) {
+//                final long previousFilterSetStamp = GUI.lastFilterChange.get();
+//                final long currentTime = System.currentTimeMillis();
+//                final long timeSinceLastChange = currentTime - previousFilterSetStamp;
+//                long timeTillNewChangeIsPossible = GUI.filterChangeThrottle - timeSinceLastChange;
+//
+//                final long previousFilteredAddedStamp = GUI.lastFilteredItemAddedRemoved.get();
+//                final long timeSinceLastAdded = currentTime - previousFilteredAddedStamp;
+//                timeTillNewChangeIsPossible = Math.max(timeTillNewChangeIsPossible, GUI.filteredAddRemoveThrottle - timeSinceLastAdded);
+//
+//                if (timeTillNewChangeIsPossible > 0L) {
+//                    Generic.threadSleepSegmented(timeTillNewChangeIsPossible, 100L, Statics.mustStop);
+//                    GUI.lastFilterChange.set(System.currentTimeMillis());
+//                } else { // no need to sleep
+//                    GUI.lastFilterChange.set(currentTime);
+//                }
+//            }
+//            GUI.initializeRightTreeView(false);
+            GUI.rightPanelVisible = false;
+            GUI.clearRightTreeView();
+            eventTreeRoot.predicateProperty().set(TreeItemPredicate.create(actor -> filterText == null || filterText.isEmpty() || StringUtils.containsIgnoreCase(actor.toString(), filterText)));
+            GUI.rightPanelVisible = true;
+            GUI.initializeRightTreeView(true);
+        }
+    }
+
+    static void setOnKeyPressedFilterTextField(@NotNull final TextField textField, @NotNull final FilterableTreeItem<String> eventTreeRoot) {
+        textField.setOnKeyPressed(ae -> {
+            if (ae.getCode() == KeyCode.ENTER) {
+                ae.consume();
+                setFilterPredicate(textField, eventTreeRoot);
+            } else if (ae.getCode() == KeyCode.ESCAPE) {
+                ae.consume();
+                textField.clear();
+                setFilterPredicate(textField, eventTreeRoot);
+            } else { // unsupported key, nothing to be done
+            }
+        });
     }
 
     @SuppressWarnings("FloatingPointEquality")
