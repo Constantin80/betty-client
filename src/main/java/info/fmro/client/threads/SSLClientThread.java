@@ -187,7 +187,7 @@ public class SSLClientThread
                                 final String eventId = (String) objectsToModify[0];
                                 final Double newAmount = (Double) objectsToModify[1];
                                 Statics.rulesManager.setEventAmountLimit(eventId, newAmount, Statics.pendingOrdersThread, Statics.orderCache.markets, Statics.existingFunds, Statics.marketCataloguesMap, Statics.marketCache.markets,
-                                                                         Statics.PROGRAM_START_TIME);
+                                                                         Statics.orderCache.initializedFromStreamStamp, Statics.PROGRAM_START_TIME);
                                 GUI.managedEventUpdated(eventId);
                             } else {
                                 logger.error("wrong objectsToModify class in runAfterReceive: {} {} {}", Generic.objectToString(objectsToModify), rulesManagerModificationCommand.name(), Generic.objectToString(receivedCommand));

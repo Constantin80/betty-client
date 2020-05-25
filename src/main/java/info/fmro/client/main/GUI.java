@@ -210,6 +210,10 @@ public class GUI
         return GUI.instance;
     }
 
+    public static boolean isRightTreeView(@NotNull final TreeView<String> treeView) {
+        return treeView == rightTreeView;
+    }
+
     public static void publicRefreshDisplayedManagedObject() {
         Platform.runLater(GUI::refreshDisplayedManagedObject);
     }
@@ -684,9 +688,9 @@ public class GUI
 //        if (rightPanelVisible) {
 //        markEventForRemoval(eventId);
 //        } else {
-        final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL);
-        scrollBarState.save(rightTreeViewInitialized.get());
         final TreeItem<String> eventTreeItem = eventsTreeItemMap.get(eventId);
+        final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL, "removeEvent " + eventId + " " + (eventTreeItem == null ? "null" : eventTreeItem.getValue()));
+        scrollBarState.save(rightTreeViewInitialized.get());
         @Nullable final ObservableList<TreeItem<String>> listOfChildren = eventTreeItem != null ? eventTreeItem.getChildren() : null;
         @Nullable final Set<String> toBeReAddedMarketIds;
         if (listOfChildren != null && !listOfChildren.isEmpty()) {
@@ -735,7 +739,7 @@ public class GUI
 
     private static void removeManagedEvent(final String eventId, final Iterable<String> marketIds) {
         final TreeItem<String> eventTreeItem = managedEventsTreeItemMap.get(eventId);
-        final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL);
+        final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL, "removeManagedEvent " + eventId + " " + (eventTreeItem == null ? "null" : eventTreeItem.getValue()));
         scrollBarState.save(leftTreeViewInitialized.get());
         if (marketIds != null) {
             for (final String marketId : marketIds) {
@@ -780,9 +784,10 @@ public class GUI
     }
 
     private static boolean removeMarket(final String marketId) {
-        final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL);
+        final TreeItem<String> marketTreeItem = marketsTreeItemMap.get(marketId);
+        final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL, "removeMarket " + marketId + " " + (marketTreeItem == null ? "null" : marketTreeItem.getValue()));
         scrollBarState.save(rightTreeViewInitialized.get());
-        final TreeItem<String> marketTreeItem = marketsTreeItemMap.remove(marketId);
+        marketsTreeItemMap.remove(marketId);
         final FilterableTreeItem<String> eventTreeItem = marketTreeItem == null ? null : (FilterableTreeItem<String>) marketTreeItem.getParent();
         @Nullable final ObservableList<TreeItem<String>> listOfChildren = eventTreeItem == null ? null : eventTreeItem.getInternalChildren();
         final boolean removed = listOfChildren != null && listOfChildren.remove(marketTreeItem);
@@ -818,7 +823,8 @@ public class GUI
 //    }
 
     private static boolean removeManagedMarket(final TreeItem<String> marketTreeItem, final TreeItem<String> eventTreeItem) {
-        final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL);
+        final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL,
+                                                                 "removeManagedMarket event:" + (eventTreeItem == null ? "null" : eventTreeItem.getValue()) + " market:" + (marketTreeItem == null ? "null" : marketTreeItem.getValue()));
         scrollBarState.save(leftTreeViewInitialized.get());
         managedMarketsTreeItemMap.removeValue(marketTreeItem);
         @Nullable final ObservableList<TreeItem<String>> parentListOfChildren = eventTreeItem == null ? null : eventTreeItem.getChildren();
@@ -1432,10 +1438,10 @@ public class GUI
         boolean added = false;
         final ScrollBarState scrollBarState;
         if (isRightTree) {
-            scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL);
+            scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL, "addTreeItem " + treeItem.getValue() + " isRightTree:" + isRightTree);
             scrollBarState.save(rightTreeViewInitialized.get());
         } else {
-            scrollBarState = new ScrollBarState(leftTreeView, Orientation.VERTICAL);
+            scrollBarState = new ScrollBarState(leftTreeView, Orientation.VERTICAL, "addTreeItem " + treeItem.getValue() + " isRightTree:" + isRightTree);
             scrollBarState.save(leftTreeViewInitialized.get());
         }
         for (int i = 0; i < size; i++) {

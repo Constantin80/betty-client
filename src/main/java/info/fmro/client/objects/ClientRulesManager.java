@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import java.io.Serializable;
 import java.util.HashSet;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class ClientRulesManager
         extends RulesManager
@@ -52,7 +53,8 @@ public class ClientRulesManager
     @Override
     public synchronized void executeCommand(@NotNull final String commandString, @NotNull final OrdersThreadInterface pendingOrdersThread, @NotNull final SynchronizedMap<? super String, ? extends OrderMarket> orderCache,
                                             @NotNull final ExistingFunds safetyLimits, @NotNull final StreamSynchronizedMap<? super String, ? extends MarketCatalogue> marketCataloguesMap,
-                                            @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap, @NotNull final SynchronizedMap<? super String, ? extends Market> marketCache, final long programStartTime) {
+                                            @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap, @NotNull final SynchronizedMap<? super String, ? extends Market> marketCache,
+                                            @NotNull final AtomicLong orderCacheInitializedFromStreamStamp, final long programStartTime) {
         logger.error("executeCommand method is not and should not be implemented in Client");
     }
 
