@@ -739,7 +739,7 @@ public class GUI
 
     private static void removeManagedEvent(final String eventId, final Iterable<String> marketIds) {
         final TreeItem<String> eventTreeItem = managedEventsTreeItemMap.get(eventId);
-        final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL, "removeManagedEvent " + eventId + " " + (eventTreeItem == null ? "null" : eventTreeItem.getValue()));
+        final ScrollBarState scrollBarState = new ScrollBarState(leftTreeView, Orientation.VERTICAL, "removeManagedEvent " + eventId + " " + (eventTreeItem == null ? "null" : eventTreeItem.getValue()));
         scrollBarState.save(leftTreeViewInitialized.get());
         if (marketIds != null) {
             for (final String marketId : marketIds) {
@@ -823,7 +823,7 @@ public class GUI
 //    }
 
     private static boolean removeManagedMarket(final TreeItem<String> marketTreeItem, final TreeItem<String> eventTreeItem) {
-        final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL,
+        final ScrollBarState scrollBarState = new ScrollBarState(leftTreeView, Orientation.VERTICAL,
                                                                  "removeManagedMarket event:" + (eventTreeItem == null ? "null" : eventTreeItem.getValue()) + " market:" + (marketTreeItem == null ? "null" : marketTreeItem.getValue()));
         scrollBarState.save(leftTreeViewInitialized.get());
         managedMarketsTreeItemMap.removeValue(marketTreeItem);

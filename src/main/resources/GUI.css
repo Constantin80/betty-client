@@ -169,6 +169,11 @@
     -fx-border-color: teal;
 }
 
+.corner{
+    -fx-background-color: black;
+    -fx-border-color: teal;
+}
+
 .increment-button, .decrement-button {
     -fx-background-color: black;
 	-fx-border-color: green;
