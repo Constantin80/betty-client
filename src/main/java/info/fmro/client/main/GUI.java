@@ -7,7 +7,6 @@ import info.fmro.shared.entities.MarketCatalogue;
 import info.fmro.shared.entities.MarketDescription;
 import info.fmro.shared.enums.RulesManagerModificationCommand;
 import info.fmro.shared.enums.SynchronizedMapModificationCommand;
-import info.fmro.shared.javafx.FilterableTreeItem;
 import info.fmro.shared.javafx.ScrollBarState;
 import info.fmro.shared.logic.ManagedEvent;
 import info.fmro.shared.logic.ManagedMarket;
@@ -61,6 +60,7 @@ import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 import org.apache.commons.collections4.bidimap.DualHashBidiMap;
+import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -107,11 +107,10 @@ public class GUI
     private static final SplitPane mainSplitPane = new SplitPane();
     //    private static final Collection<String> toBeRemovedEventIds = new HashSet<>(2);
     private static final ObservableList<Node> mainSplitPaneNodesList = mainSplitPane.getItems();
-    private static final DualHashBidiMap<String, TreeItem<String>> managedEventsTreeItemMap = new DualHashBidiMap<>(), managedMarketsTreeItemMap = new DualHashBidiMap<>();
-    private static final DualHashBidiMap<String, FilterableTreeItem<String>> eventsTreeItemMap = new DualHashBidiMap<>(), marketsTreeItemMap = new DualHashBidiMap<>();
-    private static final TreeItem<String> leftEventTreeRoot = new TreeItem<>();
-    private static final FilterableTreeItem<String> rightEventTreeRoot = new FilterableTreeItem<>(null);
-    private static final ObservableList<TreeItem<String>> leftEventRootChildrenList = leftEventTreeRoot.getChildren(), rightEventRootChildrenList = rightEventTreeRoot.getInternalChildren();
+    private static final DualHashBidiMap<String, TreeItem<String>> managedEventsTreeItemMap = new DualHashBidiMap<>(), managedMarketsTreeItemMap = new DualHashBidiMap<>(), eventsTreeItemMap = new DualHashBidiMap<>(),
+            marketsTreeItemMap = new DualHashBidiMap<>();
+    private static final TreeItem<String> leftEventTreeRoot = new TreeItem<>(), rightEventTreeRoot = new TreeItem<>();
+    private static final ObservableList<TreeItem<String>> leftEventRootChildrenList = leftEventTreeRoot.getChildren(), rightEventRootChildrenList = rightEventTreeRoot.getChildren();
     private static final GridPane mainGridPane = new GridPane();
     private static final ScrollPane mainScrollPane = new ScrollPane();
     private static final TreeView<String> leftTreeView = createTreeView(leftEventTreeRoot), rightTreeView = createTreeView(rightEventTreeRoot);
@@ -173,9 +172,7 @@ public class GUI
         }
     };
     private static final Timeline timeline = new Timeline(new KeyFrame(Duration.millis(1_000L), liveCounterEventHandler));
-    static final AtomicReference<String> previousFilterValue = new AtomicReference<>();
-//    static final AtomicLong lastFilterChange = new AtomicLong(), lastFilteredItemAddedRemoved = new AtomicLong();
-//    public static final long filterChangeThrottle = 5_000L, filteredAddRemoveThrottle = 2_000L;
+    static final AtomicReference<String> currentFilterValue = new AtomicReference<>();
 
     static {
         totalFundsLabel.setId("ImportantText");
@@ -210,7 +207,7 @@ public class GUI
         return GUI.instance;
     }
 
-    public static boolean isRightTreeView(@NotNull final TreeView<String> treeView) {
+    private static boolean isRightTreeView(@NotNull final TreeView<String> treeView) {
         return treeView == rightTreeView;
     }
 
@@ -722,19 +719,8 @@ public class GUI
     }
 
     private static void synchronizedRemoveRightChild(final TreeItem<String> treeItem, @SuppressWarnings("TypeMayBeWeakened") @NotNull final ObservableList<TreeItem<String>> rootChildrenList) {
-//        synchronized (GUI.lastFilterChange) {
-//            final long previousFilterSetStamp = GUI.lastFilterChange.get();
-//            final long currentTime = System.currentTimeMillis();
-//            final long timeSinceLastChange = currentTime - previousFilterSetStamp;
-//            final long timeTillWorkIsAllowed = GUI.filterChangeThrottle - timeSinceLastChange;
-//            if (timeTillWorkIsAllowed > 0L) {
-//                Generic.threadSleepSegmented(timeTillWorkIsAllowed, 100L, Statics.mustStop);
-//            } else { // no need to sleep
-//            }
-
         rootChildrenList.remove(treeItem);
-//            GUI.lastFilteredItemAddedRemoved.set(System.currentTimeMillis());
-//        }
+
     }
 
     private static void removeManagedEvent(final String eventId, final Iterable<String> marketIds) {
@@ -788,8 +774,8 @@ public class GUI
         final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL, "removeMarket " + marketId + " " + (marketTreeItem == null ? "null" : marketTreeItem.getValue()));
         scrollBarState.save(rightTreeViewInitialized.get());
         marketsTreeItemMap.remove(marketId);
-        final FilterableTreeItem<String> eventTreeItem = marketTreeItem == null ? null : (FilterableTreeItem<String>) marketTreeItem.getParent();
-        @Nullable final ObservableList<TreeItem<String>> listOfChildren = eventTreeItem == null ? null : eventTreeItem.getInternalChildren();
+        final TreeItem<String> eventTreeItem = marketTreeItem == null ? null : marketTreeItem.getParent();
+        @Nullable final ObservableList<TreeItem<String>> listOfChildren = eventTreeItem == null ? null : eventTreeItem.getChildren();
         final boolean removed = listOfChildren != null && listOfChildren.remove(marketTreeItem);
         if (removed && eventsTreeItemMap.getKey(eventTreeItem) == null && listOfChildren.isEmpty()) { // parentEventItem is defaultEvent and it no longer has children
             eventsTreeItemMap.removeValue(eventTreeItem);
@@ -876,9 +862,6 @@ public class GUI
         for (final TreeItem<String> treeItem : listCopy) {
             if (treeItem == null) {
                 logger.error("null treeItem during clearMarketsRightTreeView");
-            } else if (treeItem instanceof FilterableTreeItem<?>) {
-                final FilterableTreeItem<?> filterableChild = (FilterableTreeItem<?>) treeItem;
-                filterableChild.getInternalChildren().clear();
             } else {
                 treeItem.getChildren().clear();
             }
@@ -892,7 +875,7 @@ public class GUI
         clearMarketsRightTreeView();
 
         rightEventRootChildrenList.clear();
-        rightEventTreeRoot.unbind();
+//        rightEventTreeRoot.unbind();
         eventsTreeItemMap.clear();
     }
 
@@ -1067,7 +1050,7 @@ public class GUI
             } else {
                 final String eventId = Formulas.getEventIdOfMarketCatalogue(market);
 
-                @Nullable FilterableTreeItem<String> parentItem = eventsTreeItemMap.get(eventId);
+                @Nullable TreeItem<String> parentItem = eventsTreeItemMap.get(eventId);
                 if (parentItem == null) { // might be ok, won't do anything
                     parentItem = getDefaultEventAndCreateIfNotExist();
                 } else { // I have the parentItem, nothing more to be done
@@ -1082,7 +1065,7 @@ public class GUI
                     }
                 } else { // I have the name, nothing more to be done
                 }
-                final FilterableTreeItem<String> marketTreeItem = new FilterableTreeItem<>(marketName);
+                final TreeItem<String> marketTreeItem = new TreeItem<>(marketName);
 //                marketTreeItem.setExpanded(true);
                 marketsTreeItemMap.put(marketId, marketTreeItem);
                 addTreeItem(marketTreeItem, parentItem, rightTreeView);
@@ -1165,13 +1148,18 @@ public class GUI
     }
 
     @NotNull
-    private static FilterableTreeItem<String> getDefaultEventAndCreateIfNotExist() {
-        FilterableTreeItem<String> defaultEvent = eventsTreeItemMap.get(null);
+    private static TreeItem<String> getDefaultEventAndCreateIfNotExist() {
+        TreeItem<String> defaultEvent = eventsTreeItemMap.get(null);
         if (defaultEvent == null) {
-            defaultEvent = new FilterableTreeItem<>(DEFAULT_EVENT_NAME);
+            defaultEvent = new TreeItem<>(DEFAULT_EVENT_NAME);
             defaultEvent.setExpanded(true);
             eventsTreeItemMap.put(null, defaultEvent);
-            addTreeItem(defaultEvent, rightEventRootChildrenList, rightTreeView, true);
+
+            final String filterValue = currentFilterValue.get();
+            if (filterValue == null || filterValue.isEmpty()) {
+                addTreeItem(defaultEvent, rightEventTreeRoot, rightTreeView);
+            } else { // won't add default event when a filter is active
+            }
         } else { // I have the defaultEvent, nothing more to be done
         }
         return defaultEvent;
@@ -1184,7 +1172,7 @@ public class GUI
             defaultEvent = new TreeItem<>(DEFAULT_EVENT_NAME);
             defaultEvent.setExpanded(true);
             managedEventsTreeItemMap.put(null, defaultEvent);
-            addTreeItem(defaultEvent, leftEventRootChildrenList, leftTreeView, false);
+            addTreeItem(defaultEvent, leftEventTreeRoot, leftTreeView);
         } else { // I have the defaultEvent, nothing more to be done
         }
         return defaultEvent;
@@ -1215,12 +1203,14 @@ public class GUI
                 Statics.eventsMap.removeValueAll(null);
             } else {
                 final String eventName = event.getName();
-                final FilterableTreeItem<String> eventTreeItem = new FilterableTreeItem<>(eventName);
+                final String filterValue = currentFilterValue.get();
+                final TreeItem<String> eventTreeItem = new TreeItem<>(eventName);
 //                eventTreeItem.setExpanded(true);
                 eventsTreeItemMap.put(eventId, eventTreeItem);
                 if (Statics.unsupportedEventNames.contains(eventName)) { // won't add eventTreeItem to the treeView
-                } else {
-                    addTreeItem(eventTreeItem, rightEventRootChildrenList, rightTreeView, true);
+                } else if (filterValue == null || filterValue.isEmpty() || StringUtils.containsIgnoreCase(eventName, filterValue)) {
+                    addTreeItem(eventTreeItem, rightEventTreeRoot, rightTreeView);
+                } else { // not added because of filter
                 }
 
                 modified += checkMarketsOnDefaultNode(event, eventTreeItem);
@@ -1321,7 +1311,7 @@ public class GUI
                 eventTreeItem.setExpanded(true);
                 managedEventsTreeItemMap.put(eventId, eventTreeItem);
 
-                addTreeItem(eventTreeItem, leftEventRootChildrenList, leftTreeView, false);
+                addTreeItem(eventTreeItem, leftEventTreeRoot, leftTreeView);
                 modified += checkManagedMarketsOnDefaultNode(managedEvent, eventTreeItem);
                 modified++;
             }
@@ -1338,12 +1328,12 @@ public class GUI
         return modified;
     }
 
-    private static int checkMarketsOnDefaultNode(@NotNull final Event event, @NotNull final FilterableTreeItem<String> eventTreeItem) {
+    private static int checkMarketsOnDefaultNode(@NotNull final Event event, @NotNull final TreeItem<String> eventTreeItem) {
         int modified = 0;
-        final FilterableTreeItem<String> defaultEvent = eventsTreeItemMap.get(null);
+        final TreeItem<String> defaultEvent = eventsTreeItemMap.get(null);
         if (defaultEvent != null) {
             final String eventId = event.getId();
-            @NotNull final ObservableList<TreeItem<String>> defaultChildrenList = defaultEvent.getInternalChildren();
+            @NotNull final ObservableList<TreeItem<String>> defaultChildrenList = defaultEvent.getChildren();
             final Collection<TreeItem<String>> marketsToMove = new ArrayList<>(0);
             for (final TreeItem<String> marketTreeItem : defaultChildrenList) {
                 final String marketId = marketsTreeItemMap.getKey(marketTreeItem);
@@ -1407,7 +1397,7 @@ public class GUI
 
     private static void reorderManagedEventItem(@NotNull final TreeItem<String> eventItem) {
         leftEventRootChildrenList.remove(eventItem);
-        addTreeItem(eventItem, leftEventRootChildrenList, leftTreeView, false);
+        addTreeItem(eventItem, leftEventTreeRoot, leftTreeView);
     }
 
     private static void reorderManagedMarketItem(@NotNull final TreeItem<String> marketItem) {
@@ -1417,26 +1407,16 @@ public class GUI
         } else {
             @NotNull final ObservableList<TreeItem<String>> parentChildren = parent.getChildren();
             parentChildren.remove(marketItem);
-            addTreeItem(marketItem, parentChildren, leftTreeView, false);
+            addTreeItem(marketItem, parent, leftTreeView);
         }
     }
 
-    @SuppressWarnings("OverloadedMethodsWithSameNumberOfParameters")
     private static void addTreeItem(@NotNull final TreeItem<String> treeItem, @NotNull final TreeItem<String> root, @NotNull final TreeView<String> treeView) {
         @NotNull final ObservableList<TreeItem<String>> rootChildrenList = root.getChildren();
-        addTreeItem(treeItem, rootChildrenList, treeView, false);
-    }
-
-    @SuppressWarnings("OverloadedMethodsWithSameNumberOfParameters")
-    private static void addTreeItem(@NotNull final TreeItem<String> treeItem, @NotNull final FilterableTreeItem<String> root, @NotNull final TreeView<String> treeView) {
-        @NotNull final ObservableList<TreeItem<String>> rootChildrenList = root.getInternalChildren();
-        addTreeItem(treeItem, rootChildrenList, treeView, true);
-    }
-
-    private static void addTreeItem(@NotNull final TreeItem<String> treeItem, @NotNull final ObservableList<TreeItem<String>> rootChildrenList, @NotNull final TreeView<String> treeView, final boolean isRightTree) {
         final int size = rootChildrenList.size();
         boolean added = false;
         final ScrollBarState scrollBarState;
+        final boolean isRightTree = isRightTreeView(treeView);
         if (isRightTree) {
             scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL, "addTreeItem " + treeItem.getValue() + " isRightTree:" + isRightTree);
             scrollBarState.save(rightTreeViewInitialized.get());
@@ -1479,27 +1459,11 @@ public class GUI
     private static void synchronizedAddRootChild(@NotNull final TreeItem<String> treeItem, @NotNull final ObservableList<TreeItem<String>> rootChildrenList, final int position, @NotNull final TreeView<String> treeView) {
         //noinspection IfStatementWithIdenticalBranches
         if (treeView == rightTreeView) {
-//            synchronized (GUI.lastFilterChange) {
-//                final long previousFilterSetStamp = GUI.lastFilterChange.get();
-//                final long currentTime = System.currentTimeMillis();
-//                final long timeSinceLastChange = currentTime - previousFilterSetStamp;
-//                final long timeTillWorkIsAllowed = GUI.filterChangeThrottle - timeSinceLastChange;
-//                if (timeTillWorkIsAllowed > 0L) {
-//                    Generic.threadSleepSegmented(timeTillWorkIsAllowed, 100L, Statics.mustStop);
-//                } else { // no need to sleep
-//                }
-
             simpleAddRootChild(treeItem, rootChildrenList, position);
-//                GUI.lastFilteredItemAddedRemoved.set(System.currentTimeMillis());
-//            }
         } else {
             simpleAddRootChild(treeItem, rootChildrenList, position);
         }
     }
-
-//    private static void simpleAddRootChild(@NotNull final TreeItem<String> treeItem, @NotNull final ObservableList<TreeItem<String>> rootChildrenList) {
-//        simpleAddRootChild(treeItem, rootChildrenList, -1);
-//    }
 
     private static void simpleAddRootChild(@NotNull final TreeItem<String> treeItem, @SuppressWarnings({"BoundedWildcard", "TypeMayBeWeakened"}) @NotNull final ObservableList<TreeItem<String>> rootChildrenList, final int position) {
         if (position >= 0) {
@@ -2025,31 +1989,6 @@ public class GUI
         filterTextField.setStyle("-fx-background-color: black;");
         GUIUtils.setOnKeyPressedFilterTextField(filterTextField, rightEventTreeRoot);
         rightVBox.getChildren().add(filterTextField);
-
-//        rightEventTreeRoot.predicateProperty().bind(Bindings.createObjectBinding(() -> {
-//            final String filterText = filterTextField.getText();
-//            if (filterText == null || filterText.isEmpty()) {
-//                return null;
-//            }
-//            return TreeItemPredicate.create(actor -> StringUtils.containsIgnoreCase(actor.toString(), filterText));
-//        }, filterTextField.textProperty()));
-
-//        GUIUtils.setFilterPredicate(filterTextField, rightEventTreeRoot);
-
-
-
-/*
-        // Important to set the Predicate after first populate - otherwise tree is initially empty
-        (root as FilterableTreeItem<Actor>).predicateProperty().bind(Bindings.createObjectBinding(Callable {
-            if (filterField.text == null || filterField.text.isEmpty()) return@Callable null
-                    else Predicate { actor: Actor ->
-                    actor.displayName.contains(
-                            filterField.text.trim(),
-                            ignoreCase = true
-                    )
-            }
-        }, filterField.textProperty()))
-*/
 
         final Button rightPaneButton = new Button("Show _events");
         rightPaneButton.setMnemonicParsing(true);

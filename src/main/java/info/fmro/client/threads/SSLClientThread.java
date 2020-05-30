@@ -34,6 +34,7 @@ import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.Serializable;
@@ -703,6 +704,8 @@ public class SSLClientThread
                     } else {
                         if (e.getClass().equals(ConnectException.class)) {
                             logger.warn("ConnectException in SSLClientThread, will retry: {}", e.toString());
+                        } else if (e.getClass().equals(EOFException.class)) {
+                            logger.warn("EOFException in SSLClientThread, will retry: {}", e.toString());
                         } else {
                             logger.error("IOException in SSLClientThread, will retry", e);
                         }
