@@ -62,6 +62,6 @@ class SSLWriterThread
             }
         } // end while
 
-        logger.info("SSLWriterThread ends");
+        logger.debug("SSLWriterThread ends");
     }
 }

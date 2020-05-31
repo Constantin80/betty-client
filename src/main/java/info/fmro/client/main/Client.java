@@ -85,15 +85,15 @@ final class Client {
 
             if (Statics.sslClientThread.isAlive()) {
                 Statics.sslClientThread.closeSocket();
-                logger.info("joining sslClientThread thread");
+                logger.debug("joining sslClientThread thread");
                 Statics.sslClientThread.join();
             }
             if (timeJumpDetectorThread.isAlive()) {
-                logger.info("joining timeJumpDetectorThread");
+                logger.debug("joining timeJumpDetectorThread");
                 timeJumpDetectorThread.join();
             }
             if (maintenanceThread.isAlive()) {
-                logger.info("joining maintenance thread");
+                logger.debug("joining maintenance thread");
                 maintenanceThread.join();
             }
 
@@ -116,7 +116,7 @@ final class Client {
                 }
             }
 
-            logger.info("All threads finished");
+            logger.debug("All threads finished");
 
             if (!Statics.programIsRunningMultiThreaded.getAndSet(false)) {
                 logger.error("final programMultithreaded state is false");

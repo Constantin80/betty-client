@@ -63,6 +63,6 @@ public class TimeJumpDetectorThread
             }
         } // end while
 
-        logger.info("TimeJumpDetectorThread ends");
+        logger.debug("TimeJumpDetectorThread ends");
     }
 }

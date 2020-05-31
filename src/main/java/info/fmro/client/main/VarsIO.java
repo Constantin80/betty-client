@@ -40,7 +40,7 @@ public final class VarsIO {
                 logger.warn("objectFromFile null for: {} {}", key, entry.getValue());
             }
         } // end for
-        logger.info("have read objects from files");
+        logger.debug("have read objects from files");
     }
 
     public static void writeObjectsToFiles() {

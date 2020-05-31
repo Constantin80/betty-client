@@ -37,9 +37,9 @@ public class MaintenanceThread
         long timeTillNext = timeForNext - System.currentTimeMillis();
         if (timeTillNext <= 0) {
             Statics.timeStamps.lastPrintDebugStamp(Generic.MINUTE_LENGTH_MILLISECONDS << 1);
-            logger.info("maxMemory: {} totalMemory: {} freeMemory: {}", Generic.addCommas(Runtime.getRuntime().maxMemory()), Generic.addCommas(Runtime.getRuntime().totalMemory()), Generic.addCommas(Runtime.getRuntime().freeMemory()));
-            logger.info("threadPool active/mostEver: {}/{} scheduledPool active/mostEver: {}/{}", Statics.threadPoolExecutor.getActiveCount(), Statics.threadPoolExecutor.getLargestPoolSize(), Statics.scheduledThreadPoolExecutor.getActiveCount(),
-                        Statics.scheduledThreadPoolExecutor.getLargestPoolSize());
+            logger.debug("maxMemory: {} totalMemory: {} freeMemory: {}", Generic.addCommas(Runtime.getRuntime().maxMemory()), Generic.addCommas(Runtime.getRuntime().totalMemory()), Generic.addCommas(Runtime.getRuntime().freeMemory()));
+            logger.debug("threadPool active/mostEver: {}/{} scheduledPool active/mostEver: {}/{}", Statics.threadPoolExecutor.getActiveCount(), Statics.threadPoolExecutor.getLargestPoolSize(), Statics.scheduledThreadPoolExecutor.getActiveCount(),
+                         Statics.scheduledThreadPoolExecutor.getLargestPoolSize());
 
             timeForNext = Statics.timeStamps.getLastPrintDebug();
 
@@ -83,6 +83,6 @@ public class MaintenanceThread
             }
         } // end while
 
-        logger.info("maintenance thread ends");
+        logger.debug("maintenance thread ends");
     }
 }

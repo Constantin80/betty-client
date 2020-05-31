@@ -58,7 +58,7 @@ public class SSLClientThread
     private SSLSocket socket;
 
     public void closeSocket() { // probably doesn't need synchronization
-        logger.info("closing SSLClientThread socket");
+        logger.debug("closing SSLClientThread socket");
         Generic.closeObjects(this.socket);
     }
 
@@ -751,6 +751,6 @@ public class SSLClientThread
             Statics.mustStop.set(true);
         }
 
-        logger.info("SSLClientThread ends");
+        logger.debug("SSLClientThread ends");
     }
 }

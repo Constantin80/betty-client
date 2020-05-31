@@ -72,6 +72,7 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -1606,7 +1607,9 @@ public class GUI
 //    }
 
     @SuppressWarnings({"ValueOfIncrementOrDecrementUsed", "OverlyLongMethod", "OverlyComplexMethod"})
-    private static int showRunner(final String marketId, final RunnerId runnerId, final ManagedRunner managedRunner, final MarketRunner marketRunner, final MarketCatalogue marketCatalogue, final int previousLinesRowIndex, final int runnerRowIndex) {
+    private static int showRunner(final String marketId, final RunnerId runnerId, final ManagedRunner managedRunner, final MarketRunner marketRunner, final MarketCatalogue marketCatalogue, final Market market, final int previousLinesRowIndex,
+                                  final int runnerRowIndex) {
+        final boolean isActive = managedRunner != null && managedRunner.isActive(market);
         final String runnerName = marketCatalogue == null ? null : marketCatalogue.getRunnerName(runnerId);
         final double backAmountLimit = managedRunner == null ? -1d : managedRunner.simpleGetBackAmountLimit();
         final double layAmountLimit = managedRunner == null ? -1d : managedRunner.simpleGetLayAmountLimit();
@@ -1710,8 +1713,8 @@ public class GUI
 
         int columnIndex = 2;
         mainGridPane.add(runnerNameLabel, columnIndex++, runnerRowIndex);
-        mainGridPane.add(backAmountLimitNode, columnIndex++, runnerRowIndex);
-        mainGridPane.add(minBackOddsNode, columnIndex++, runnerRowIndex);
+        mainGridPane.add(isActive ? backAmountLimitNode : new Label("inactive"), columnIndex++, runnerRowIndex);
+        mainGridPane.add(isActive ? minBackOddsNode : new Label("inact"), columnIndex++, runnerRowIndex);
         for (int i = N_PRICE_CELLS - 1; i >= 0; i--) {
             mainGridPane.add(availableToBackLabel[i], columnIndex++, runnerRowIndex);
             if (i == 0) {
@@ -1728,8 +1731,8 @@ public class GUI
                 availableToLayLabel[i].setId("NotColoredPriceSizeCell");
             }
         }
-        mainGridPane.add(maxLayOddsNode, columnIndex++, runnerRowIndex);
-        mainGridPane.add(layAmountLimitNode, columnIndex++, runnerRowIndex);
+        mainGridPane.add(isActive ? maxLayOddsNode : new Label("inact"), columnIndex++, runnerRowIndex);
+        mainGridPane.add(isActive ? layAmountLimitNode : new Label("inactive"), columnIndex++, runnerRowIndex);
         mainGridPane.add(lastTradedPriceLabel, columnIndex++, runnerRowIndex);
         mainGridPane.add(runnerTotalValueTradedLabel, columnIndex++, runnerRowIndex);
         mainGridPane.add(compositeExposureLabel, columnIndex, runnerRowIndex);
@@ -1896,13 +1899,15 @@ public class GUI
             }
 
             int runnerIndex = 0;
-            @NotNull final HashMap<RunnerId, ManagedRunner> managedRunners = managedMarket.getRunners();
+            @NotNull final LinkedHashMap<RunnerId, ManagedRunner> managedRunners =
+                    managedMarket.getRunners(Statics.marketCache.markets, Statics.rulesManager.listOfQueues, Statics.rulesManager.marketsToCheck, Statics.rulesManager.events, Statics.rulesManager.markets, Statics.rulesManager.rulesHaveChanged,
+                                             Statics.marketCataloguesMap, Statics.PROGRAM_START_TIME);
             final HashMap<RunnerId, MarketRunner> allRunners = cachedMarket == null ? null : cachedMarket.getMarketRunners();
             for (@NotNull final Map.Entry<RunnerId, ManagedRunner> entry : managedRunners.entrySet()) {
                 final RunnerId runnerId = entry.getKey();
                 final ManagedRunner managedRunner = entry.getValue();
                 final MarketRunner marketRunner = allRunners == null ? null : allRunners.get(runnerId);
-                rowIndex = showRunner(marketId, runnerId, managedRunner, marketRunner, marketCatalogue, rowIndex, runnerIndex++);
+                rowIndex = showRunner(marketId, runnerId, managedRunner, marketRunner, marketCatalogue, cachedMarket, rowIndex, runnerIndex++);
             }
             if (allRunners == null) { // no marketRunners list present, nothing to be done
             } else {
@@ -1911,7 +1916,7 @@ public class GUI
                     if (managedRunners.containsKey(runnerId)) { // I already parsed this in the previous for loop, nothing to be done here
                     } else { // non managed runner
                         final MarketRunner marketRunner = entry.getValue();
-                        rowIndex = showRunner(marketId, runnerId, null, marketRunner, marketCatalogue, rowIndex, runnerIndex++);
+                        rowIndex = showRunner(marketId, runnerId, null, marketRunner, marketCatalogue, cachedMarket, rowIndex, runnerIndex++);
                     }
                 } // end for
             }
