@@ -7,25 +7,22 @@ import info.fmro.shared.logic.ExistingFunds;
 import info.fmro.shared.logic.ManagedEvent;
 import info.fmro.shared.logic.ManagedMarket;
 import info.fmro.shared.logic.RulesManager;
-import info.fmro.shared.stream.cache.market.Market;
-import info.fmro.shared.stream.cache.order.OrderMarket;
-import info.fmro.shared.stream.objects.OrdersThreadInterface;
 import info.fmro.shared.stream.objects.StreamSynchronizedMap;
-import info.fmro.shared.utility.SynchronizedMap;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.HashSet;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicLong;
 
 public class ClientRulesManager
         extends RulesManager
         implements Serializable {
     private static final Logger logger = LoggerFactory.getLogger(ClientRulesManager.class);
+    @Serial
     private static final long serialVersionUID = -3456154120718631120L;
 
     @Override
@@ -51,10 +48,8 @@ public class ClientRulesManager
     }
 
     @Override
-    public synchronized void executeCommand(@NotNull final String commandString, @NotNull final OrdersThreadInterface pendingOrdersThread, @NotNull final SynchronizedMap<? super String, ? extends OrderMarket> orderCache,
-                                            @NotNull final ExistingFunds safetyLimits, @NotNull final StreamSynchronizedMap<? super String, ? extends MarketCatalogue> marketCataloguesMap,
-                                            @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap, @NotNull final SynchronizedMap<? super String, ? extends Market> marketCache,
-                                            @NotNull final AtomicLong orderCacheInitializedFromStreamStamp, final long programStartTime) {
+    public synchronized void executeCommand(@NotNull final String commandString, @NotNull final ExistingFunds safetyLimits, @NotNull final StreamSynchronizedMap<? super String, ? extends MarketCatalogue> marketCataloguesMap,
+                                            @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap) {
         logger.error("executeCommand method is not and should not be implemented in Client");
     }
 
@@ -82,7 +77,7 @@ public class ClientRulesManager
 
     @Override
     protected synchronized ManagedMarket addManagedMarket(@NotNull final String marketId, @NotNull final StreamSynchronizedMap<? super String, ? extends MarketCatalogue> marketCataloguesMap,
-                                                          @NotNull final SynchronizedMap<? super String, ? extends Market> marketCache, @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap, final long programStartTime) {
+                                                          @NotNull final StreamSynchronizedMap<? super String, ? extends Event> eventsMap) {
 //        logger.error("no need to use ClientRulesManager overridden addManagedMarket(2 args), use the version without marketCataloguesMap!");
         return addManagedMarket(marketId);
     }
@@ -97,7 +92,7 @@ public class ClientRulesManager
     @SuppressWarnings("WeakerAccess")
     protected synchronized ManagedMarket addManagedMarket(@NotNull final String marketId) {
         final ManagedMarket existingMarket = this.markets.get(marketId);
-        final ManagedMarket managedMarket = super.addManagedMarket(marketId, Statics.marketCataloguesMap, Statics.marketCache.markets, Statics.eventsMap, Statics.PROGRAM_START_TIME);
+        final ManagedMarket managedMarket = super.addManagedMarket(marketId, Statics.marketCataloguesMap, Statics.eventsMap);
         if (Objects.equals(existingMarket, managedMarket)) { // no modification was made
         } else {
             GUI.publicAddManagedMarket(marketId, managedMarket);

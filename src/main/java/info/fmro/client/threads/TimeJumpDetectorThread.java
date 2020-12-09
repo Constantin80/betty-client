@@ -1,6 +1,6 @@
 package info.fmro.client.threads;
 
-import info.fmro.client.objects.Statics;
+import info.fmro.shared.objects.SharedStatics;
 import info.fmro.shared.utility.Generic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,7 +13,7 @@ public class TimeJumpDetectorThread
     @Override
     public void run() {
         long timeBeforeSleep, timeAfterSleep = System.currentTimeMillis(), timeDifference;
-        while (!Statics.mustStop.get()) {
+        while (!SharedStatics.mustStop.get()) {
             try {
                 timeBeforeSleep = System.currentTimeMillis();
                 timeDifference = Math.abs(timeBeforeSleep - timeAfterSleep);

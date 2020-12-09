@@ -53,6 +53,33 @@
 -fx-text-fill: yellow;
 }
 
+.tree-cell:selected {
+    -fx-font-weight: bold;
+    -fx-background-color: blue;
+}
+
+.check-box {
+    /* default properties */
+    -fx-border-color: yellow;
+    -fx-border-width: 2 2 3 2;
+    selected-box-color: black;
+    box-color: black;
+    mark-color: yellow;
+}
+.check-box:selected > .box {
+    /* background color for selected checkbox */
+    -fx-background-color: selected-box-color;
+}
+.check-box > .box {
+    /* background color of unselected checkbox */
+    -fx-background-color: box-color;
+}
+.check-box:selected > .box > .mark,
+.check-box:indeterminate  > .box > .mark {
+    /* modify mark color */
+    -fx-background-color: mark-color;
+}
+
 .context-menu{
 -fx-background-color: black;
 -fx-border-color: green;
@@ -100,6 +127,15 @@
 -fx-border-color: red;
 -fx-font-size: 10;
 -fx-text-fill: yellow;
+}
+
+.button:focused{
+-fx-border-width: 2;
+-fx-background-color: green;
+-fx-border-color: yellow;
+-fx-font-size: 10;
+-fx-text-fill: yellow;
+-fx-border-radius: 3 3 3 3; /* top-left, top-right, bottom-right, and bottom-left corners */
 }
 
 .button:pressed{

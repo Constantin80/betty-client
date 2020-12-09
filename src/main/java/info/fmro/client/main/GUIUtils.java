@@ -1,5 +1,6 @@
 package info.fmro.client.main;
 
+import info.fmro.client.objects.FocusPosition;
 import info.fmro.client.objects.Statics;
 import info.fmro.shared.entities.Event;
 import info.fmro.shared.entities.MarketCatalogue;
@@ -10,19 +11,31 @@ import info.fmro.shared.logic.ManagedMarket;
 import info.fmro.shared.stream.cache.market.Market;
 import info.fmro.shared.stream.definitions.MarketDefinition;
 import info.fmro.shared.stream.enums.Side;
+import info.fmro.shared.stream.objects.RunnerId;
 import info.fmro.shared.stream.objects.SerializableObjectModification;
 import info.fmro.shared.utility.Formulas;
 import info.fmro.shared.utility.Generic;
 import javafx.collections.ObservableList;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.DialogPane;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
 import javafx.scene.control.TreeItem;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.text.TextAlignment;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
 import javafx.util.StringConverter;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
@@ -34,11 +47,12 @@ import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
 
-@SuppressWarnings({"UtilityClass", "unused"})
+@SuppressWarnings({"UtilityClass", "OverlyComplexClass", "unused"})
 final class GUIUtils {
     private static final Logger logger = LoggerFactory.getLogger(GUIUtils.class);
     public static final String EXPIRED_MARKER = "zzz ";
@@ -56,8 +70,7 @@ final class GUIUtils {
     static String getManagedMarketName(final String marketId, @NotNull final ManagedMarket managedMarket) {
         @Nullable String name = managedMarket.simpleGetMarketName();
         if (name == null) {
-            name = managedMarket.getMarketName(Statics.marketCache.markets, Statics.rulesManager.listOfQueues, Statics.rulesManager.marketsToCheck, Statics.rulesManager.events, Statics.rulesManager.markets, Statics.rulesManager.rulesHaveChanged,
-                                               Statics.marketCataloguesMap, Statics.PROGRAM_START_TIME);
+            name = managedMarket.getMarketName(Statics.rulesManager, Statics.marketCataloguesMap);
             if (name == null) {
                 final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
                 if (marketCatalogue != null) {
@@ -73,8 +86,7 @@ final class GUIUtils {
                 }
 
                 if (name == null) {
-                    final Market market = managedMarket.getMarket(Statics.marketCache.markets, Statics.rulesManager.listOfQueues, Statics.rulesManager.marketsToCheck, Statics.rulesManager.events, Statics.rulesManager.markets,
-                                                                  Statics.rulesManager.rulesHaveChanged, Statics.marketCataloguesMap, Statics.PROGRAM_START_TIME);
+                    final Market market = managedMarket.getMarket(Statics.rulesManager, Statics.marketCataloguesMap);
                     if (market != null) {
                         final MarketDefinition marketDefinition = market.getMarketDefinition();
                         if (marketDefinition != null) {
@@ -137,7 +149,7 @@ final class GUIUtils {
         @Nullable final String name;
         if (marketCatalogue == null) {
             logger.error("null marketCatalogue found during getManagedEventNameFromMarketCatalogue for: {}", eventId);
-            Statics.marketCataloguesMap.removeValueAll(null);
+            Statics.marketCataloguesMap.superRemoveValueAll(null);
             name = null;
         } else {
             final Event eventStump = marketCatalogue.getEventStump();
@@ -161,8 +173,16 @@ final class GUIUtils {
         return Statics.eventsMap.containsKey(eventId);
     }
 
+    static boolean eventExistsInMapAndNotMarkedForRemoval(final String eventId) {
+        return eventExistsInMap(eventId) && !GUI.toBeRemovedEventIds.contains(eventId);
+    }
+
     static boolean marketExistsInMap(final String marketId) {
         return Statics.marketCataloguesMap.containsKey(marketId);
+    }
+
+    static boolean marketExistsInMapAndNotMarkedForRemoval(final String marketId) {
+        return marketExistsInMap(marketId) && !GUI.toBeRemovedMarketIds.contains(marketId);
     }
 
     @Nullable
@@ -189,7 +209,7 @@ final class GUIUtils {
             if (nameIsMarkedAsExpired(name)) {
                 result = removeExpiredMarker(name);
             } else {
-                logger.info("name not marked as expired in markNameAsNotExpired: {}", name);
+//                logger.info("name not marked as expired in markNameAsNotExpired: {}", name);
                 result = name;
             }
         }
@@ -197,7 +217,7 @@ final class GUIUtils {
         return result;
     }
 
-    static boolean nameIsMarkedAsExpired(@NotNull final String name) {
+    private static boolean nameIsMarkedAsExpired(@NotNull final String name) {
         return name.startsWith(EXPIRED_MARKER);
     }
 
@@ -216,6 +236,7 @@ final class GUIUtils {
     static void setFilterPredicate(@NotNull final TextField textField, @NotNull final TreeItem<String> eventTreeRoot) {
         final String filterText = textField.getText();
         final String currentFilterValue = GUI.currentFilterValue.getAndSet(filterText);
+//        logger.info ("filterText: {} currentFilterValue: {}", filterText, currentFilterValue);
         if (Objects.equals(filterText, currentFilterValue)) { // won't change the predicate to the same value, nothing to be done
         } else {
             GUI.rightPanelVisible = false;
@@ -241,9 +262,11 @@ final class GUIUtils {
     }
 
     @SuppressWarnings("FloatingPointEquality")
-    static <T extends Enum<T>> void setOnKeyPressedTextField(@NotNull final TextField textField, final double initialValue, final T command, final Serializable... objects) {
+    static <T extends Enum<T>> void setOnKeyPressedTextField(final String id, @NotNull final TextField textField, final double initialValue, final T command, final Serializable... objects) {
+        final AtomicBoolean enterBeingPressed = new AtomicBoolean();
         textField.setOnKeyPressed(ae -> {
             if (ae.getCode() == KeyCode.ENTER) {
+                enterBeingPressed.set(true);
                 double primitive = -1d;
                 try {
                     primitive = Double.parseDouble(textField.getText());
@@ -260,57 +283,125 @@ final class GUIUtils {
                 } else {
                     Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(command, Generic.concatArrays(objects, new Serializable[]{withinRangePrimitive})));
                 }
+//                focusPosition.reset(id, GridPane.getColumnIndex(textField), GridPane.getRowIndex(textField));
+                textField.getParent().requestFocus();
+//                GUI.resumeRefresh();
             } else if (ae.getCode() == KeyCode.ESCAPE) {
                 textField.setText(GUI.decimalFormatTextField.format(Generic.keepDoubleWithinRange(initialValue)));
+//                focusPosition.reset(id, GridPane.getColumnIndex(textField), GridPane.getRowIndex(textField));
+                textField.getParent().requestFocus();
+//                GUI.resumeRefresh();
             } else { // unsupported key, nothing to be done
             }
         });
+        textField.setOnMousePressed(ae -> {
+            textField.requestFocus();
+            ae.consume();
+        });
         textField.focusedProperty().addListener((observable, oldValue, newValue) -> {
-            if (!newValue) {
-                textField.setText(GUI.decimalFormatTextField.format(Generic.keepDoubleWithinRange(initialValue)));
+            if (newValue) { // got focus
+//                focusPosition.setFocus(id, GridPane.getColumnIndex(textField), GridPane.getRowIndex(textField), textField.getCaretPosition());
+                GUI.pauseRefresh();
+            } else { // lost focus
+                if (enterBeingPressed.get()) { // it's handled in the KeyCode.ENTER block
+                } else {
+                    textField.setText(GUI.decimalFormatTextField.format(Generic.keepDoubleWithinRange(initialValue)));
+                }
+//                focusPosition.reset(id, GridPane.getColumnIndex(textField), GridPane.getRowIndex(textField));
+//                textField.getParent().requestFocus();
+                GUI.resumeRefresh();
             }
         });
     }
 
-    static <T extends Enum<T>> void setOnKeyPressedTextFieldOdds(@NotNull final Side side, @NotNull final TextField textField, @NotNull final AtomicInteger columnIndex, @NotNull final AtomicInteger rowIndex, final double initialValue, final T command,
+    static <T extends Enum<T>> void setOnKeyPressedTextFieldOdds(final String id, @NotNull final Side side, @NotNull final TextField textField, @NotNull final FocusPosition focusPosition, final double initialValue, final T command,
                                                                  final Serializable... objects) {
+        final AtomicBoolean enterBeingPressed = new AtomicBoolean();
         textField.setOnKeyPressed(ae -> {
             if (ae.getCode() == KeyCode.UP) {
-                final double newValue = Formulas.getNextOddsUp(initialValue, side);
-                //noinspection FloatingPointEquality
-                if (newValue == initialValue) { // nothing changed
-                    textField.end();
-                } else {
-                    textField.setText(GUI.decimalFormatTextField.format(newValue));
-                    columnIndex.set(GridPane.getColumnIndex(textField));
-                    rowIndex.set(GridPane.getRowIndex(textField));
-                    Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(command, Generic.concatArrays(objects, new Serializable[]{newValue})));
-                }
+                final double newValue = Math.max(1.01d, Formulas.getNextOddsUp(textField.getText(), side));
+//                if (newValue == initialValue) { // nothing changed
+//                    textField.end();
+//                } else {
+//                focusPosition.setFocus(id, GridPane.getColumnIndex(textField), GridPane.getRowIndex(textField), textField.getCaretPosition());
+                textField.setText(GUI.decimalFormatTextField.format(newValue));
+//                    Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(command, Generic.concatArrays(objects, new Serializable[]{newValue})));
+//                }
+                ae.consume();
+//                GUI.resumeRefresh();
             } else if (ae.getCode() == KeyCode.DOWN) {
-                final double newValue = Formulas.getNextOddsDown(initialValue, side);
+                final double newValue = Math.min(1_000d, Formulas.getNextOddsDown(textField.getText(), side));
+//                if (newValue == initialValue) { // nothing changed
+//                    textField.home();
+//                } else {
+//                focusPosition.setFocus(id, GridPane.getColumnIndex(textField), GridPane.getRowIndex(textField), textField.getCaretPosition());
+                textField.setText(GUI.decimalFormatTextField.format(newValue));
+//                    Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(command, Generic.concatArrays(objects, new Serializable[]{newValue})));
+//                }
+                ae.consume();
+//                GUI.resumeRefresh();
+            } else if (ae.getCode() == KeyCode.ESCAPE) {
+                textField.setText(GUI.decimalFormatTextField.format(Formulas.getClosestOdds(initialValue, side)));
+                focusPosition.reset(id, GridPane.getColumnIndex(textField), GridPane.getRowIndex(textField));
+                textField.getParent().requestFocus();
+//                GUI.resumeRefresh();
+            } else if (ae.getCode() == KeyCode.ENTER) {
+                enterBeingPressed.set(true);
+                final double newValue = Formulas.getClosestOdds(textField.getText(), side);
                 //noinspection FloatingPointEquality
                 if (newValue == initialValue) { // nothing changed
                 } else {
-                    textField.setText(GUI.decimalFormatTextField.format(newValue));
-                    columnIndex.set(GridPane.getColumnIndex(textField));
-                    rowIndex.set(GridPane.getRowIndex(textField));
-                    Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(command, Generic.concatArrays(objects, new Serializable[]{newValue})));
+                    final Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Change " + (side == Side.B ? "BACK" : "LAY") + " odds from " + initialValue + " to " + newValue + " ?", ButtonType.YES, ButtonType.NO);
+                    alert.setHeaderText("Odds modification confirmation");
+
+                    //Deactivate Defaultbehavior for yes-Button:
+                    final Button yesButton = (Button) alert.getDialogPane().lookupButton(ButtonType.YES);
+                    yesButton.setDefaultButton(false);
+                    //Activate Defaultbehavior for no-Button:
+                    final Button noButton = (Button) alert.getDialogPane().lookupButton(ButtonType.NO);
+                    noButton.setDefaultButton(true);
+                    alert.initOwner(GUI.mainStage);
+
+                    final Optional<ButtonType> result = alert.showAndWait();
+                    if (result.isPresent()) {
+//                        focusPosition.setFocus(id, GridPane.getColumnIndex(textField), GridPane.getRowIndex(textField), textField.getCaretPosition());
+                        if (result.get() == ButtonType.YES) {
+                            textField.setText(GUI.decimalFormatTextField.format(newValue));
+                            Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(command, Generic.concatArrays(objects, new Serializable[]{newValue})));
+                        } else {
+                            textField.setText(GUI.decimalFormatTextField.format(Formulas.getClosestOdds(initialValue, side)));
+                        }
+                    } else {
+                        logger.error("result not present during setOnKeyPressedTextFieldOdds alert for: {} {} {} {}", id, side, textField.getText(), newValue);
+                        textField.setText(GUI.decimalFormatTextField.format(Formulas.getClosestOdds(initialValue, side)));
+                    }
                 }
-            } else if (ae.getCode() == KeyCode.ESCAPE || ae.getCode() == KeyCode.ENTER) {
-                textField.setText(GUI.decimalFormatTextField.format(Formulas.getClosestOdds(initialValue, side)));
+                focusPosition.reset(id, GridPane.getColumnIndex(textField), GridPane.getRowIndex(textField));
+                textField.getParent().requestFocus();
+                GUI.resumeRefresh();
             } else { // unsupported key, nothing to be done
             }
         });
+        textField.setOnMousePressed(ae -> {
+//            focusPosition.setFocus(id, GridPane.getColumnIndex(textField), GridPane.getRowIndex(textField), textField.getCaretPosition());
+            textField.requestFocus();
+            ae.consume();
+        });
         textField.focusedProperty().addListener((observable, oldValue, newValue) -> {
-            if (!newValue) {
-                textField.setText(GUI.decimalFormatTextField.format(Generic.keepDoubleWithinRange(initialValue)));
+            if (newValue) { // got focus
+                GUI.pauseRefresh();
+            } else { // lost focus
+                if (enterBeingPressed.get()) { // it's handled in the KeyCode.ENTER block
+                } else {
+                    textField.setText(GUI.decimalFormatTextField.format(Generic.keepDoubleWithinRange(initialValue)));
+                    GUI.resumeRefresh();
+                }
             }
         });
     }
 
     static void handleDoubleTextField(@NotNull final TextField textField, final double value) {
         @SuppressWarnings("RegExpAnonymousGroup") final Pattern validEditingState = Pattern.compile("-?(([1-9][0-9]*)|0)?(\\.[0-9]*)?"); // "-?(([1-9][0-9]*)|0)?(\\.[0-9]*)?"
-
         final UnaryOperator<TextFormatter.Change> filter = c -> {
             final String text = c.getControlNewText();
             return validEditingState.matcher(text).matches() ? c : null;
@@ -368,6 +459,102 @@ final class GUIUtils {
             returnValue = GUI.decimalFormatLabelHigh.format(value);
         }
         return returnValue;
+    }
+
+    static void centerButtons(@NotNull final DialogPane dialogPane) {
+        final Region spacer = new Region();
+        ButtonBar.setButtonData(spacer, ButtonBar.ButtonData.BIG_GAP);
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        dialogPane.applyCss();
+        final HBox hBoxDialogPane = (HBox) dialogPane.lookup(".container");
+        hBoxDialogPane.getChildren().add(spacer);
+    }
+
+    static CheckBox standardCheckBoxFactory(@NotNull final Stage mainStage, @NotNull final Label parentLabel, final String eventName, final String marketId, final String marketName, final boolean booleanMarker,
+                                            @NotNull final RulesManagerModificationCommand rulesManagerModificationCommand, @NotNull final String stringMarker) {
+        return standardCheckBoxFactory(mainStage, parentLabel, eventName, marketId, marketName, null, null, booleanMarker, rulesManagerModificationCommand, stringMarker);
+    }
+
+    @SuppressWarnings("UnusedReturnValue")
+    static CheckBox standardCheckBoxFactory(@NotNull final Stage mainStage, @NotNull final Label parentLabel, final String marketId, final RunnerId runnerId, final String runnerName,
+                                            final boolean booleanMarker, @NotNull final RulesManagerModificationCommand rulesManagerModificationCommand, @NotNull final String stringMarker) {
+        return standardCheckBoxFactory(mainStage, parentLabel, null, marketId, null, runnerId, runnerName, booleanMarker, rulesManagerModificationCommand, stringMarker);
+    }
+
+    private static CheckBox standardCheckBoxFactory(@NotNull final Stage mainStage, @NotNull final Label parentLabel, final String eventName, final String marketId, final String marketName, final RunnerId runnerId, final String runnerName,
+                                                    final boolean booleanMarker, @NotNull final RulesManagerModificationCommand rulesManagerModificationCommand, @NotNull final String stringMarker) {
+        final boolean isRunner = runnerId != null;
+        final String processedStringMarker = stringMarker.isEmpty() ? stringMarker : stringMarker + " on ";
+        final CheckBox checkBox = new CheckBox();
+        parentLabel.setGraphic(checkBox);
+        checkBox.setSelected(booleanMarker);
+        checkBox.setOnAction(actionEvent -> {
+            checkBox.setSelected(booleanMarker);
+            final Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+            alert.setTitle("Confirmation Dialog");
+            if (isRunner) {
+                //noinspection SpellCheckingInspection
+                alert.setHeaderText("You are " + (booleanMarker ? "DIS" : "EN") + "ABLING " + processedStringMarker + "runner: " + runnerName + " (marketId:" + marketId + " " + runnerId + ")");
+            } else {
+                //noinspection SpellCheckingInspection
+                alert.setHeaderText("You are " + (booleanMarker ? "DIS" : "EN") + "ABLING " + processedStringMarker + "market: " + marketName + " (id:" + marketId + ")");
+            }
+            alert.setContentText("Are you ok with this?");
+            alert.initModality(Modality.APPLICATION_MODAL);
+            alert.initOwner(mainStage);
+            final Optional<ButtonType> result = alert.showAndWait();
+            if (result.isPresent()) {
+                if (result.get() == ButtonType.OK) {
+                    if (isRunner) {
+                        Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(rulesManagerModificationCommand, marketId, runnerId, !booleanMarker));
+                    } else {
+                        Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(rulesManagerModificationCommand, marketId, !booleanMarker));
+                    }
+                } else { // user chose CANCEL or closed the dialog
+                }
+            } else {
+                if (isRunner) {
+                    logger.error("result not present during runner {} alert for: {} {} {} {}", stringMarker.isEmpty() ? "enable" : stringMarker, booleanMarker, marketId, runnerName, runnerId);
+                } else {
+                    logger.error("result not present during market {} alert for: {} {} {} {}", stringMarker.isEmpty() ? "enable" : stringMarker, booleanMarker, marketId, marketName, eventName);
+                }
+            }
+            alert.close();
+        });
+        checkBox.setOnMousePressed(mouseEvent -> {
+            checkBox.setSelected(booleanMarker);
+            final Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+            alert.setTitle("Confirmation Dialog");
+            if (isRunner) {
+                //noinspection SpellCheckingInspection
+                alert.setHeaderText("You are " + (booleanMarker ? "DIS" : "EN") + "ABLING " + processedStringMarker + "runner: " + runnerName + " (marketId:" + marketId + " " + runnerId + ")");
+            } else {
+                //noinspection SpellCheckingInspection
+                alert.setHeaderText("You are " + (booleanMarker ? "DIS" : "EN") + "ABLING " + processedStringMarker + "market: " + marketName + " (id:" + marketId + ")");
+            }
+            alert.setContentText("Are you ok with this?");
+            alert.initModality(Modality.APPLICATION_MODAL);
+            alert.initOwner(mainStage);
+            final Optional<ButtonType> result = alert.showAndWait();
+            if (result.isPresent()) {
+                if (result.get() == ButtonType.OK) {
+                    if (isRunner) {
+                        Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(rulesManagerModificationCommand, marketId, runnerId, !booleanMarker));
+                    } else {
+                        Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(rulesManagerModificationCommand, marketId, !booleanMarker));
+                    }
+                } else { // user chose CANCEL or closed the dialog
+                }
+            } else {
+                if (isRunner) {
+                    logger.error("result not present during runner {} alert for: {} {} {} {}", stringMarker.isEmpty() ? "enable" : stringMarker, booleanMarker, marketId, runnerName, runnerId);
+                } else {
+                    logger.error("result not present during market {} alert for: {} {} {} {}", stringMarker.isEmpty() ? "enable" : stringMarker, booleanMarker, marketId, marketName, eventName);
+                }
+            }
+            alert.close();
+        });
+        return checkBox;
     }
 
 //    static <TV> void triggerTreeItemRefresh(final TreeItem<TV> item) {

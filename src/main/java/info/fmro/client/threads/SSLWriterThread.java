@@ -1,6 +1,7 @@
 package info.fmro.client.threads;
 
 import info.fmro.client.objects.Statics;
+import info.fmro.shared.objects.SharedStatics;
 import info.fmro.shared.stream.objects.PoisonPill;
 import info.fmro.shared.stream.objects.StreamObjectInterface;
 import org.jetbrains.annotations.NotNull;
@@ -54,7 +55,7 @@ class SSLWriterThread
 
     @Override
     public void run() {
-        while (!Statics.mustStop.get() && !this.finished.get()) {
+        while (!SharedStatics.mustStop.get() && !this.finished.get()) {
             try {
                 this.sendObject(this.sendQueue.take());
             } catch (InterruptedException e) {
@@ -62,6 +63,7 @@ class SSLWriterThread
             }
         } // end while
 
+        Statics.clientHadDisconnectionFromServer.set(true);
         logger.debug("SSLWriterThread ends");
     }
 }

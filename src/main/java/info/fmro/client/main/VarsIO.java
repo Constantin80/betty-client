@@ -1,7 +1,8 @@
 package info.fmro.client.main;
 
 import info.fmro.client.objects.Statics;
-import info.fmro.client.objects.TimeStamps;
+import info.fmro.shared.objects.SharedStatics;
+import info.fmro.shared.objects.TimeStamps;
 import info.fmro.shared.utility.Generic;
 import org.jetbrains.annotations.Contract;
 import org.slf4j.Logger;
@@ -27,7 +28,7 @@ public final class VarsIO {
                     switch (key) {
                         case "timeStamps" -> {
                             final TimeStamps timeStamps = (TimeStamps) objectFromFile;
-                            Statics.timeStamps.copyFrom(timeStamps);
+                            SharedStatics.timeStamps.copyFrom(timeStamps);
                         }
                         default -> logger.error("unknown object in the fileNames map: {} {}", key, entry.getValue());
                     } // end switch
@@ -44,13 +45,13 @@ public final class VarsIO {
     }
 
     public static void writeObjectsToFiles() {
-        Statics.timeStamps.lastObjectsSaveStamp(Generic.MINUTE_LENGTH_MILLISECONDS * 10L);
-        Statics.timeLastSaveToDisk.set(System.currentTimeMillis());
+        SharedStatics.timeStamps.lastObjectsSaveStamp(Generic.MINUTE_LENGTH_MILLISECONDS * 10L);
+        SharedStatics.timeLastSaveToDisk.set(System.currentTimeMillis());
         for (final Entry<String, String> entry : Statics.objectFileNamesMap.entrySet()) {
             final String key = entry.getKey();
             //noinspection SwitchStatementWithTooFewBranches
             switch (key) {
-                case "timeStamps" -> Generic.synchronizedWriteObjectToFile(Statics.timeStamps, entry.getValue());
+                case "timeStamps" -> Generic.synchronizedWriteObjectToFile(SharedStatics.timeStamps, entry.getValue());
                 default -> logger.error("unknown key in the fileNames map: {} {}", key, entry.getValue());
             } // end switch
         } // end for

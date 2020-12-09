@@ -6,13 +6,16 @@ import info.fmro.shared.stream.objects.ListOfQueues;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
+import java.io.Serial;
 import java.io.Serializable;
 
 public class ObservedExistingFunds
         extends ExistingFunds
         implements Serializable {
+    @Serial
     private static final long serialVersionUID = -9002646711271737365L;
 
+    @Serial
     private void readObject(@NotNull final java.io.ObjectInputStream in)
             throws IOException, ClassNotFoundException {
         in.defaultReadObject();

@@ -6,6 +6,8 @@ import info.fmro.shared.objects.Exposure;
 import info.fmro.shared.stream.objects.RunnerId;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -22,7 +24,7 @@ class SSLClientThreadTest {
 
         assertEquals(testObject, clazz, "3");
 
-        final Object managedRunner = new ManagedRunner("id", new RunnerId(1234L, 9876.123d));
+        final Object managedRunner = new ManagedRunner("id", new RunnerId(1234L, 9876.123d), new AtomicBoolean(), new AtomicBoolean());
         final Object exposureObjectClass = Exposure.class;
         final Class<?> exposureClass = (Class<?>) exposureObjectClass;
         assertTrue(exposureClass.isAssignableFrom(managedRunner.getClass()), "Exposure.class is assignable from its subclass ManagedRunner");

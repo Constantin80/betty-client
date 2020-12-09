@@ -1,19 +1,25 @@
 package info.fmro.client.main;
 
+import info.fmro.client.objects.FocusPosition;
+import info.fmro.client.objects.PlatformRunLaterCommand;
+import info.fmro.client.objects.PlatformRunLaterEnum;
 import info.fmro.client.objects.Statics;
 import info.fmro.client.utility.Utils;
 import info.fmro.shared.entities.Event;
 import info.fmro.shared.entities.MarketCatalogue;
 import info.fmro.shared.entities.MarketDescription;
+import info.fmro.shared.enums.PrefSide;
 import info.fmro.shared.enums.RulesManagerModificationCommand;
 import info.fmro.shared.enums.SynchronizedMapModificationCommand;
+import info.fmro.shared.enums.TemporaryOrderType;
 import info.fmro.shared.javafx.ScrollBarState;
 import info.fmro.shared.logic.ManagedEvent;
 import info.fmro.shared.logic.ManagedMarket;
 import info.fmro.shared.logic.ManagedRunner;
+import info.fmro.shared.objects.SharedStatics;
+import info.fmro.shared.objects.TemporaryOrder;
 import info.fmro.shared.stream.cache.market.Market;
 import info.fmro.shared.stream.cache.market.MarketRunner;
-import info.fmro.shared.stream.cache.order.OrderMarketRunner;
 import info.fmro.shared.stream.definitions.MarketDefinition;
 import info.fmro.shared.stream.enums.Side;
 import info.fmro.shared.stream.objects.RunnerId;
@@ -36,7 +42,10 @@ import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
@@ -66,6 +75,7 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -79,9 +89,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TimerTask;
 import java.util.TreeMap;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -96,17 +106,18 @@ public class GUI
     public static final int N_PRICE_CELLS = 3;
     @SuppressWarnings("StaticVariableMayNotBeInitialized")
     private static Application instance;
-    @SuppressWarnings("StaticVariableMayNotBeInitialized")
-    private static Stage mainStage;
-    private static final AtomicInteger focusedColumnIndex = new AtomicInteger(-1), focusedRowIndex = new AtomicInteger(-1);
+    @SuppressWarnings({"StaticVariableMayNotBeInitialized", "PackageVisibleField"})
+    static Stage mainStage;
+    private static final FocusPosition focusPosition = new FocusPosition();
     private static final AtomicBoolean primaryStageIsShown = new AtomicBoolean(), leftTreeViewInitialized = new AtomicBoolean(), rightTreeViewInitialized = new AtomicBoolean();
+    private static final AtomicBoolean refreshPaused = new AtomicBoolean(), refreshQueued = new AtomicBoolean();
     private static final String DEFAULT_EVENT_NAME = "no event attached", NULL_NAME = "null value";
     private static final Label totalFundsLabel = new Label("€ " + decimalFormatLabelLow.format(Statics.existingFunds.getTotalFunds()));
     private static final Label availableLabel = new Label("€ " + decimalFormatLabelLow.format(Statics.existingFunds.getAvailableFunds()));
     private static final Label reserveLabel = new Label("€ " + decimalFormatLabelLow.format(Statics.existingFunds.getReserve()));
     private static final Label exposureLabel = new Label("€ " + decimalFormatLabelLow.format(Statics.existingFunds.getExposure()));
     private static final SplitPane mainSplitPane = new SplitPane();
-    //    private static final Collection<String> toBeRemovedEventIds = new HashSet<>(2);
+    static final Collection<String> toBeRemovedEventIds = new HashSet<>(2), toBeRemovedMarketIds = new HashSet<>(2);
     private static final ObservableList<Node> mainSplitPaneNodesList = mainSplitPane.getItems();
     private static final DualHashBidiMap<String, TreeItem<String>> managedEventsTreeItemMap = new DualHashBidiMap<>(), managedMarketsTreeItemMap = new DualHashBidiMap<>(), eventsTreeItemMap = new DualHashBidiMap<>(),
             marketsTreeItemMap = new DualHashBidiMap<>();
@@ -117,11 +128,12 @@ public class GUI
     private static final TreeView<String> leftTreeView = createTreeView(leftEventTreeRoot), rightTreeView = createTreeView(rightEventTreeRoot);
     private static final VBox rightVBox = new VBox(rightTreeView);
     private static final TextField filterTextField = new TextField();
+    private static final Button refreshEventsButton = new Button("_Refresh events");
     //    private static final Pattern NUMERIC_PATTERN = Pattern.compile("\\d*");
 //    private static final Pattern NUMERIC_PATTERN = Pattern.compile("[+-]?\\d*\\.?\\d+"); // [+-]?\\d*\\.?\\d+
 //    private static final Pattern NON_NUMERIC_PATTERN = Pattern.compile("[^\\d]");
     @SuppressWarnings("PackageVisibleField")
-    static boolean rightPanelVisible;
+    static volatile boolean rightPanelVisible;
     @Nullable
     @SuppressWarnings("RedundantFieldInitialization")
     private static TreeItem<String> currentlyShownManagedObject = null;
@@ -145,7 +157,11 @@ public class GUI
     private static final Label nManagedRunnersPreLabel = new Label("nManagedRunners:");
     //    private static final Label unmatchedBackPreLabel = new Label("Unmatched Back:");
 //    private static final Label unmatchedLayPreLabel = new Label("Unmatched Lay:");
-    private static final Label isNotEnabledPreLabel = new Label("Market disabled:");
+    @SuppressWarnings("SpellCheckingInspection")
+    private static final Label marketIsEnabledLabel = new Label("Mark enab:");
+    @SuppressWarnings("SpellCheckingInspection")
+    private static final Label marketMandatoryPlaceLabel = new Label("Mand plac:");
+    private static final Label marketKeepAtInPlayLabel = new Label("Kp inPlay:");
     private static final AtomicLong liveTime = new AtomicLong();
     private static final Label marketLiveCounterLabel = new Label();
     private static final EventHandler<ActionEvent> liveCounterEventHandler = event -> {
@@ -174,8 +190,16 @@ public class GUI
     };
     private static final Timeline timeline = new Timeline(new KeyFrame(Duration.millis(1_000L), liveCounterEventHandler));
     static final AtomicReference<String> currentFilterValue = new AtomicReference<>();
+    private static final LinkedBlockingQueue<PlatformRunLaterCommand<PlatformRunLaterEnum>> platformRunLaterCommands = new LinkedBlockingQueue<>();
+    private static final Object runLaterSync = new Object();
+    private static volatile boolean runLaterIsRunning, platformStopped;
+    private static final AtomicBoolean threadInWaitingExists = new AtomicBoolean();
 
     static {
+        marketIsEnabledLabel.setContentDisplay(ContentDisplay.RIGHT);
+        marketMandatoryPlaceLabel.setContentDisplay(ContentDisplay.RIGHT);
+        marketKeepAtInPlayLabel.setContentDisplay(ContentDisplay.RIGHT);
+
         totalFundsLabel.setId("ImportantText");
         totalFundsLabel.setMinWidth(200);
         availableLabel.setId("ImportantText");
@@ -194,7 +218,9 @@ public class GUI
 
     @Override
     public void stop() {
-        Statics.mustStop.set(true);
+        SharedStatics.mustStop.set(true);
+        //noinspection AssignmentToStaticFieldFromInstanceMethod
+        GUI.platformStopped = true;
     }
 
     @Override
@@ -212,269 +238,315 @@ public class GUI
         return treeView == rightTreeView;
     }
 
+    private static void addCommand(final PlatformRunLaterEnum commandEnum, final Serializable... objectsToModify) {
+        platformRunLaterCommands.add(new PlatformRunLaterCommand<>(commandEnum, objectsToModify));
+        runLater();
+    }
+
+    private static void runLater() {
+        if (threadInWaitingExists.getAndSet(true)) { // already running, will exit
+        } else {
+            new Thread(() -> {
+                synchronized (runLaterSync) {
+                    threadInWaitingExists.set(false);
+                    if (platformRunLaterCommands.isEmpty()) { // no commands in queue, won't run
+                    } else {
+                        runLaterIsRunning = true;
+                        Platform.runLater(GUI::runLaterCore);
+
+                        while (runLaterIsRunning && !platformStopped) {
+                            Thread.onSpinWait();
+                        }
+                    }
+                }
+            }).start();
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "OverlyLongMethod"})
+    private static void runLaterCore() {
+        PlatformRunLaterCommand<PlatformRunLaterEnum> platformRunLaterCommand;
+        //noinspection NestedAssignment
+        while ((platformRunLaterCommand = platformRunLaterCommands.poll()) != null) {
+            final PlatformRunLaterEnum platformRunLaterEnum = platformRunLaterCommand.getCommand();
+            final Serializable[] variables = platformRunLaterCommand.getArray();
+            switch (platformRunLaterEnum) {
+                case refreshDisplayedManagedObject -> refreshDisplayedManagedObject();
+                case managedMarketUpdated -> updateCurrentManagedMarket((String) variables[0]);
+                case managedEventUpdated -> updateCurrentManagedEvent((String) variables[0]);
+                case updateTotalFundsLabel -> totalFundsLabel.setText((String) variables[0]);
+                case updateAvailableLabel -> availableLabel.setText((String) variables[0]);
+                case updateReserveLabel -> reserveLabel.setText((String) variables[0]);
+                case updateExposureLabel -> exposureLabel.setText((String) variables[0]);
+                case checkTreeItemsWithNullName -> privateCheckTreeItemsWithNullName(false);
+                case removeManagedEvent -> removeManagedEvent((String) variables[0], (Iterable<String>) variables[1]);
+                case addManagedEvent -> addManagedEvent((String) variables[0], (ManagedEvent) variables[1]);
+                case addManagedMarket -> addManagedMarket((String) variables[0], (ManagedMarket) variables[1]);
+                case removeManagedMarket -> removeManagedMarket((String) variables[0]);
+                case initializeRulesManagerTreeView -> initializeLeftTreeView();
+                case markManagedItemAsExpired -> markManagedItemAsExpired((String) variables[0], (Boolean) variables[1]);
+                case markManagedItemsAsExpired -> markManagedItemsAsExpired((Iterable<String>) variables[0], (Boolean) variables[1]);
+                case markAllManagedItemsAsExpired -> markAllManagedItemsAsExpired((Boolean) variables[0]);
+                case markManagedItemAsNotExpired -> markManagedItemAsNotExpired((String) variables[0], (Boolean) variables[1]);
+                case markManagedItemsAsNotExpired -> markManagedItemsAsNotExpired((Iterable<String>) variables[0], (Boolean) variables[1]);
+                case initializeEventsTreeView -> {
+                    if (rightPanelVisible) {
+                        initializeRightTreeView();
+                    } else { // I will only update the right panel if it is visible
+                    }
+                }
+                case initializeMarketsTreeView -> {
+                    if (rightPanelVisible) {
+                        initializeMarketsRightTreeView();
+                    } else { // I will only update the right panel if it is visible
+                    }
+                }
+                case clearEventsTreeView -> {
+                    if (rightPanelVisible) {
+                        clearRightTreeView();
+                    } else { // I will only update the right panel if it is visible
+                    }
+                }
+                case clearMarketsTreeView -> {
+                    if (rightPanelVisible) {
+                        clearMarketsRightTreeView();
+                    } else { // I will only update the right panel if it is visible
+                    }
+                }
+                case putAllEvent -> {
+                    final Map<String, Event> m = (Map<String, Event>) variables[0];
+                    if (rightPanelVisible) {
+                        putAllEvent(m);
+                    } else { // I will only update the right panel if it is visible
+                    }
+                    if (m == null) { // nothing to be done
+                    } else {
+                        updateManagedEvents(m.keySet());
+                    }
+                }
+                case putAllMarket -> {
+                    final Map<String, MarketCatalogue> m = (Map<String, MarketCatalogue>) variables[0];
+                    if (rightPanelVisible) {
+                        putAllMarket(m);
+                    } else { // I will only update the right panel if it is visible
+                    }
+                    if (m == null) { // nothing to be done
+                    } else {
+                        updateManagedMarkets(m.keySet());
+                    }
+                }
+                case removeEntriesEvent -> removeEntriesEvent((Iterable<? extends Map.Entry<String, Event>>) variables[0]);
+                case removeEntriesMarket -> removeEntriesMarket((Iterable<? extends Map.Entry<String, MarketCatalogue>>) variables[0]);
+                case retainEntriesEvent -> retainEntriesEvent((Collection<? extends Map.Entry<String, Event>>) variables[0]);
+                case retainEntriesMarket -> retainEntriesMarket((Collection<? extends Map.Entry<String, MarketCatalogue>>) variables[0]);
+                case removeKeysEvent -> removeKeysEvent((Iterable<String>) variables[0]);
+                case removeKeysMarket -> removeKeysMarket((Iterable<String>) variables[0]);
+                case retainKeysEvent -> retainKeysEvent((Collection<String>) variables[0]);
+                case retainKeysMarket -> retainKeysMarket((Collection<String>) variables[0]);
+                case removeValueAllEvent, removeEvent -> removeEvent((Event) variables[0]);
+                case removeValueAllMarket, removeMarketCatalogue -> removeMarket((MarketCatalogue) variables[0]);
+                case removeValuesEvent -> removeValuesEvent((Iterable<? extends Event>) variables[0]);
+                case removeValuesMarket -> removeValuesMarket((Iterable<? extends MarketCatalogue>) variables[0]);
+                case retainValuesEvent -> retainValuesEvent((Collection<? extends Event>) variables[0]);
+                case retainValuesMarket -> retainValuesMarket((Collection<? extends MarketCatalogue>) variables[0]);
+                case removeEventId -> removeEvent((String) variables[0]);
+                case addEvent -> {
+                    if (rightPanelVisible) {
+                        addEvent((String) variables[0], (Event) variables[1]);
+                    } else { // I will only update the right panel if it is visible
+                    }
+                    updateManagedEvents(Set.of((String) variables[0]));
+                }
+                case addMarket -> {
+                    if (rightPanelVisible) {
+                        addMarket((String) variables[0], (MarketCatalogue) variables[1]);
+                    } else { // I will only update the right panel if it is visible
+                    }
+                    updateManagedMarkets(Set.of((String) variables[0]));
+                }
+                case removeMarketId -> removeMarket((String) variables[0]);
+                case refreshEventsButtonSetDisable -> refreshEventsButton.setDisable(false);
+                default -> logger.error("unknown platformRunLaterEnum in runLaterCore: {} {}", platformRunLaterEnum, Generic.objectToString(variables));
+            }
+        }
+        runLaterIsRunning = false;
+    }
+
     public static void publicRefreshDisplayedManagedObject() {
-        Platform.runLater(GUI::refreshDisplayedManagedObject);
+        addCommand(PlatformRunLaterEnum.refreshDisplayedManagedObject);
     }
 
     public static void managedMarketUpdated(final String marketId) {
-        Platform.runLater(() -> updateCurrentManagedMarket(marketId));
+        addCommand(PlatformRunLaterEnum.managedMarketUpdated, marketId);
     }
 
     public static void managedEventUpdated(final String eventId) {
-        Platform.runLater(() -> updateCurrentManagedEvent(eventId));
+        addCommand(PlatformRunLaterEnum.managedEventUpdated, eventId);
     }
 
     public static void updateTotalFundsLabel(final double funds) {
-        Platform.runLater(() -> totalFundsLabel.setText("€ " + decimalFormatLabelLow.format(funds)));
+        addCommand(PlatformRunLaterEnum.updateTotalFundsLabel, "€ " + decimalFormatLabelLow.format(funds));
     }
 
     public static void updateAvailableLabel(final double funds) {
-        Platform.runLater(() -> availableLabel.setText("€ " + decimalFormatLabelLow.format(funds)));
+        addCommand(PlatformRunLaterEnum.updateAvailableLabel, "€ " + decimalFormatLabelLow.format(funds));
     }
 
     public static void updateReserveLabel(final double funds) {
-        Platform.runLater(() -> reserveLabel.setText("€ " + decimalFormatLabelLow.format(funds)));
+        addCommand(PlatformRunLaterEnum.updateReserveLabel, "€ " + decimalFormatLabelLow.format(funds));
     }
 
     public static void updateExposureLabel(final double funds) {
-        Platform.runLater(() -> exposureLabel.setText("€ " + decimalFormatLabelLow.format(funds)));
+        addCommand(PlatformRunLaterEnum.updateExposureLabel, "€ " + decimalFormatLabelLow.format(funds));
     }
 
     @SuppressWarnings("WeakerAccess")
     public static void checkTreeItemsWithNullName() {
-        Platform.runLater(GUI::privateCheckTreeItemsWithNullName);
+        addCommand(PlatformRunLaterEnum.checkTreeItemsWithNullName);
     }
 
-    public static void publicRemoveManagedEvent(final String eventId, final Iterable<String> marketIds) {
-        Platform.runLater(() -> removeManagedEvent(eventId, marketIds));
+    public static void publicRemoveManagedEvent(final String eventId, final HashSet<String> marketIds) {
+        addCommand(PlatformRunLaterEnum.removeManagedEvent, eventId, marketIds);
     }
 
     public static void publicAddManagedEvent(final String eventId, final ManagedEvent managedEvent) {
-        Platform.runLater(() -> addManagedEvent(eventId, managedEvent));
+        addCommand(PlatformRunLaterEnum.addManagedEvent, eventId, managedEvent);
     }
 
     public static void publicAddManagedMarket(final String marketId, final ManagedMarket managedMarket) {
-        Platform.runLater(() -> addManagedMarket(marketId, managedMarket));
+        addCommand(PlatformRunLaterEnum.addManagedMarket, marketId, managedMarket);
     }
 
     public static void publicRemoveManagedMarket(final String marketId) {
-        Platform.runLater(() -> removeManagedMarket(marketId));
+        addCommand(PlatformRunLaterEnum.removeManagedMarket, marketId);
     }
 
     public static void initializeRulesManagerTreeView() {
-        Platform.runLater(GUI::initializeLeftTreeView);
+        addCommand(PlatformRunLaterEnum.initializeRulesManagerTreeView);
     }
 
     public static void publicMarkManagedItemAsExpired(final String id, final boolean isEvent) {
-        Platform.runLater(() -> markManagedItemAsExpired(id, isEvent));
+        addCommand(PlatformRunLaterEnum.markManagedItemAsExpired, id, isEvent);
     }
 
-    public static void publicMarkManagedItemsAsExpired(@NotNull final Iterable<String> ids, final boolean isEvent) {
-        Platform.runLater(() -> markManagedItemsAsExpired(ids, isEvent));
+    public static void publicMarkManagedItemsAsExpired(@NotNull final HashSet<String> ids, final boolean isEvent) {
+        addCommand(PlatformRunLaterEnum.markManagedItemsAsExpired, ids, isEvent);
     }
 
     public static void publicMarkAllManagedItemsAsExpired(final boolean isEvent) {
-        Platform.runLater(() -> markAllManagedItemsAsExpired(isEvent));
+        addCommand(PlatformRunLaterEnum.markAllManagedItemsAsExpired, isEvent);
     }
 
     public static void publicMarkManagedItemAsNotExpired(final String id, final boolean isEvent) {
-        Platform.runLater(() -> markManagedItemAsNotExpired(id, isEvent));
+        addCommand(PlatformRunLaterEnum.markManagedItemAsNotExpired, id, isEvent);
     }
 
-    public static void publicMarkManagedItemsAsNotExpired(@NotNull final Iterable<String> ids, final boolean isEvent) {
-        Platform.runLater(() -> markManagedItemsAsNotExpired(ids, isEvent));
+    public static void publicMarkManagedItemsAsNotExpired(@NotNull final HashSet<String> ids, final boolean isEvent) {
+        addCommand(PlatformRunLaterEnum.markManagedItemsAsNotExpired, ids, isEvent);
     }
 
     public static void initializeEventsTreeView() {
-        if (rightPanelVisible) {
-            Platform.runLater(GUI::initializeRightTreeView);
-        } else { // I will only update the right panel if it is visible
-        }
+        addCommand(PlatformRunLaterEnum.initializeEventsTreeView);
     }
 
     public static void initializeMarketsTreeView() {
-        if (rightPanelVisible) {
-            Platform.runLater(GUI::initializeMarketsRightTreeView);
-        } else { // I will only update the right panel if it is visible
-        }
+        addCommand(PlatformRunLaterEnum.initializeMarketsTreeView);
     }
 
     public static void clearEventsTreeView() {
-        if (rightPanelVisible) {
-            Platform.runLater(GUI::clearRightTreeView);
-        } else { // I will only update the right panel if it is visible
-        }
+        addCommand(PlatformRunLaterEnum.clearEventsTreeView);
     }
 
     public static void clearMarketsTreeView() {
-        if (rightPanelVisible) {
-            Platform.runLater(GUI::clearMarketsRightTreeView);
-        } else { // I will only update the right panel if it is visible
-        }
+        addCommand(PlatformRunLaterEnum.clearMarketsTreeView);
     }
 
-    public static void publicPutAllEvent(final Map<String, Event> m) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> putAllEvent(m));
-        } else { // I will only update the right panel if it is visible
-        }
-        if (m == null) { // nothing to be done
-        } else {
-            Platform.runLater(() -> updateManagedEvents(m.keySet()));
-        }
+    public static void publicPutAllEvent(final HashMap<String, Event> m) {
+        addCommand(PlatformRunLaterEnum.putAllEvent, m);
     }
 
-    public static void publicPutAllMarket(final Map<String, MarketCatalogue> m) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> putAllMarket(m));
-        } else { // I will only update the right panel if it is visible
-        }
-        if (m == null) { // nothing to be done
-        } else {
-            Platform.runLater(() -> updateManagedMarkets(m.keySet()));
-        }
+    public static void publicPutAllMarket(final HashMap<String, MarketCatalogue> m) {
+        addCommand(PlatformRunLaterEnum.putAllMarket, m);
     }
 
-    public static void publicRemoveEntriesEvent(final Iterable<? extends Map.Entry<String, Event>> c) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> removeEntriesEvent(c));
-        } else { // I will only update the right panel if it is visible
-        }
+    public static void publicRemoveEntriesEvent(final HashSet<? extends Map.Entry<String, Event>> c) {
+        addCommand(PlatformRunLaterEnum.removeEntriesEvent, c);
     }
 
-    public static void publicRemoveEntriesMarket(final Iterable<? extends Map.Entry<String, MarketCatalogue>> c) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> removeEntriesMarket(c));
-        } else { // I will only update the right panel if it is visible
-        }
+    public static void publicRemoveEntriesMarket(final HashSet<? extends Map.Entry<String, MarketCatalogue>> c) {
+        addCommand(PlatformRunLaterEnum.removeEntriesMarket, c);
     }
 
-    public static void publicRetainEntriesEvent(final Collection<? extends Map.Entry<String, Event>> c) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> retainEntriesEvent(c));
-        } else { // I will only update the right panel if it is visible
-        }
+    public static void publicRetainEntriesEvent(final HashSet<? extends Map.Entry<String, Event>> c) {
+        addCommand(PlatformRunLaterEnum.retainEntriesEvent, c);
     }
 
-    public static void publicRetainEntriesMarket(final Collection<? extends Map.Entry<String, MarketCatalogue>> c) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> retainEntriesMarket(c));
-        } else { // I will only update the right panel if it is visible
-        }
+    public static void publicRetainEntriesMarket(final HashSet<? extends Map.Entry<String, MarketCatalogue>> c) {
+        addCommand(PlatformRunLaterEnum.retainEntriesMarket, c);
     }
 
-    public static void publicRemoveKeysEvent(final Iterable<String> c) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> removeKeysEvent(c));
-        } else { // I will only update the right panel if it is visible
-        }
+    public static void publicRemoveKeysEvent(final HashSet<String> c) {
+        addCommand(PlatformRunLaterEnum.removeKeysEvent, c);
     }
 
-    public static void publicRemoveKeysMarket(final Iterable<String> c) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> removeKeysMarket(c));
-        } else { // I will only update the right panel if it is visible
-        }
+    public static void publicRemoveKeysMarket(final HashSet<String> c) {
+        addCommand(PlatformRunLaterEnum.removeKeysMarket, c);
     }
 
-    public static void publicRetainKeysEvent(final Collection<String> c) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> retainKeysEvent(c));
-        } else { // I will only update the right panel if it is visible
-        }
+    public static void publicRetainKeysEvent(final HashSet<String> c) {
+        addCommand(PlatformRunLaterEnum.retainKeysEvent, c);
     }
 
-    public static void publicRetainKeysMarket(final Collection<String> c) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> retainKeysMarket(c));
-        } else { // I will only update the right panel if it is visible
-        }
+    public static void publicRetainKeysMarket(final HashSet<String> c) {
+        addCommand(PlatformRunLaterEnum.retainKeysMarket, c);
     }
 
     public static void publicRemoveValueAllEvent(final Event value) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> removeEvent(value));
-        } else { // I will only update the right panel if it is visible
-        }
+        addCommand(PlatformRunLaterEnum.removeValueAllEvent, value);
     }
 
     public static void publicRemoveValueAllMarket(final MarketCatalogue value) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> removeMarket(value));
-        } else { // I will only update the right panel if it is visible
-        }
+        addCommand(PlatformRunLaterEnum.removeValueAllMarket, value);
     }
 
-    public static void publicRemoveValuesEvent(final Iterable<? extends Event> c) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> removeValuesEvent(c));
-        } else { // I will only update the right panel if it is visible
-        }
+    public static void publicRemoveValuesEvent(final HashSet<? extends Event> c) {
+        addCommand(PlatformRunLaterEnum.removeValuesEvent, c);
     }
 
-    public static void publicRemoveValuesMarket(final Iterable<? extends MarketCatalogue> c) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> removeValuesMarket(c));
-        } else { // I will only update the right panel if it is visible
-        }
+    public static void publicRemoveValuesMarket(final HashSet<? extends MarketCatalogue> c) {
+        addCommand(PlatformRunLaterEnum.removeValuesMarket, c);
     }
 
-    public static void publicRetainValuesEvent(final Collection<? extends Event> c) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> retainValuesEvent(c));
-        } else { // I will only update the right panel if it is visible
-        }
+    public static void publicRetainValuesEvent(final HashSet<? extends Event> c) {
+        addCommand(PlatformRunLaterEnum.retainValuesEvent, c);
     }
 
-    public static void publicRetainValuesMarket(final Collection<? extends MarketCatalogue> c) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> retainValuesMarket(c));
-        } else { // I will only update the right panel if it is visible
-        }
+    public static void publicRetainValuesMarket(final HashSet<? extends MarketCatalogue> c) {
+        addCommand(PlatformRunLaterEnum.retainValuesMarket, c);
     }
 
     public static void publicRemoveEvent(final String eventId) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> removeEvent(eventId));
-        } else { // I will only update the right panel if it is visible
-        }
+        addCommand(PlatformRunLaterEnum.removeEventId, eventId);
     }
 
     public static void publicRemoveEvent(final Event event) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> removeEvent(event));
-        } else { // I will only update the right panel if it is visible
-        }
+        addCommand(PlatformRunLaterEnum.removeEvent, event);
     }
 
     public static void publicAddEvent(final String eventId, final Event event) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> addEvent(eventId, event));
-        } else { // I will only update the right panel if it is visible
-        }
-        Platform.runLater(() -> updateManagedEvents(Set.of(eventId)));
+        addCommand(PlatformRunLaterEnum.addEvent, eventId, event);
     }
 
     public static void publicAddMarket(final String marketId, final MarketCatalogue market) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> addMarket(marketId, market));
-        } else { // I will only update the right panel if it is visible
-        }
-        Platform.runLater(() -> updateManagedMarkets(Set.of(marketId)));
+        addCommand(PlatformRunLaterEnum.addMarket, marketId, market);
     }
 
     public static void publicRemoveMarket(final MarketCatalogue market) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> removeMarket(market));
-        } else { // I will only update the right panel if it is visible
-        }
+        addCommand(PlatformRunLaterEnum.removeMarketCatalogue, market);
     }
 
     public static void publicRemoveMarket(final String marketId) {
-        if (rightPanelVisible) {
-            Platform.runLater(() -> removeMarket(marketId));
-        } else { // I will only update the right panel if it is visible
-        }
+        addCommand(PlatformRunLaterEnum.removeMarketId, marketId);
     }
 
     private static void putAllEvent(final Map<String, Event> m) {
@@ -661,20 +733,34 @@ public class GUI
         }
     }
 
-    @SuppressWarnings("unused")
-    private static void markEventForRemoval(@SuppressWarnings("unused") final String eventId) {
-//        toBeRemovedEventIds.add(eventId);
+    private static boolean markMarketForRemoval(final String marketId) {
+        return toBeRemovedMarketIds.add(marketId);
     }
 
-    private static void unMarkEventForRemoval(@SuppressWarnings("unused") final String eventId) {
-//        toBeRemovedEventIds.remove(eventId);
+    private static void unMarkMarketForRemoval(final String marketId) {
+        toBeRemovedMarketIds.remove(marketId);
+    }
+
+    private static void processMarketsForRemoval() {
+        for (final String marketId : toBeRemovedMarketIds) {
+            removeMarket(marketId, true);
+        }
+        toBeRemovedEventIds.clear();
+    }
+
+    private static void markEventForRemoval(final String eventId) {
+        toBeRemovedEventIds.add(eventId);
+    }
+
+    private static void unMarkEventForRemoval(final String eventId) {
+        toBeRemovedEventIds.remove(eventId);
     }
 
     private static void processEventsForRemoval() {
-//        for (final String eventId : toBeRemovedEventIds) {
-//            removeEvent(eventId);
-//        }
-//        toBeRemovedEventIds.clear();
+        for (final String eventId : toBeRemovedEventIds) {
+            removeEvent(eventId, true);
+        }
+        toBeRemovedEventIds.clear();
     }
 
     private static void removeEvent(final Event event) {
@@ -683,45 +769,50 @@ public class GUI
     }
 
     private static void removeEvent(final String eventId) {
-//        if (rightPanelVisible) {
-//        markEventForRemoval(eventId);
-//        } else {
-        final TreeItem<String> eventTreeItem = eventsTreeItemMap.get(eventId);
-        final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL, "removeEvent " + eventId + " " + (eventTreeItem == null ? "null" : eventTreeItem.getValue()));
-        scrollBarState.save(rightTreeViewInitialized.get());
-        @Nullable final ObservableList<TreeItem<String>> listOfChildren = eventTreeItem != null ? eventTreeItem.getChildren() : null;
-        @Nullable final Set<String> toBeReAddedMarketIds;
-        if (listOfChildren != null && !listOfChildren.isEmpty()) {
-            toBeReAddedMarketIds = new HashSet<>(4);
-            for (final TreeItem<String> marketItem : listOfChildren) {
-                final String marketId = marketsTreeItemMap.getKey(marketItem);
-                marketsTreeItemMap.removeValue(marketItem);
-                if (marketId != null) {
-                    toBeReAddedMarketIds.add(marketId);
-                } else {
-                    logger.error("null marketId while building reAdd set in removeEvent for: {} {}", eventId, Generic.objectToString(marketItem));
+        removeEvent(eventId, false);
+    }
+
+    private static void removeEvent(final String eventId, final boolean removeAnyway) {
+        if (rightPanelVisible && !removeAnyway) {
+            markEventForRemoval(eventId);
+        } else {
+            final TreeItem<String> eventTreeItem = eventsTreeItemMap.get(eventId);
+            final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL, "removeEvent " + eventId + " " + (eventTreeItem == null ? "null" : eventTreeItem.getValue()));
+            scrollBarState.save(rightTreeViewInitialized.get());
+            @Nullable final ObservableList<TreeItem<String>> listOfChildren = eventTreeItem != null ? eventTreeItem.getChildren() : null;
+            @Nullable final Set<String> toBeReAddedMarketIds;
+            if (listOfChildren != null && !listOfChildren.isEmpty()) {
+                toBeReAddedMarketIds = new HashSet<>(4);
+                for (final TreeItem<String> marketItem : listOfChildren) {
+                    final String marketId = marketsTreeItemMap.getKey(marketItem);
+                    marketsTreeItemMap.removeValue(marketItem);
+                    if (marketId != null) {
+                        toBeReAddedMarketIds.add(marketId);
+                    } else {
+                        logger.error("null marketId while building reAdd set in removeEvent for: {} {}", eventId, Generic.objectToString(marketItem));
+                    }
                 }
+                listOfChildren.clear();
+            } else { // no markets to remove from children
+                toBeReAddedMarketIds = null;
             }
-            listOfChildren.clear();
-        } else { // no markets to remove from children
-            toBeReAddedMarketIds = null;
-        }
 //            rightEventRootChildrenList.remove(eventTreeItem);
-        synchronizedRemoveRightChild(eventTreeItem, rightEventRootChildrenList);
-        eventsTreeItemMap.remove(eventId);
-        if (toBeReAddedMarketIds != null) { // might be normal
-            for (final String marketId : toBeReAddedMarketIds) {
-                addMarket(marketId);
+            synchronizedRemoveRightChild(eventTreeItem, rightEventRootChildrenList);
+            eventsTreeItemMap.remove(eventId);
+            if (toBeReAddedMarketIds != null) { // might be normal
+                for (final String marketId : toBeReAddedMarketIds) {
+                    addMarket(marketId);
+                }
+            } else { // this is the normal case, nothing to be reAdded
             }
-        } else { // this is the normal case, nothing to be reAdded
+            scrollBarState.restore(rightTreeViewInitialized.get());
+
+            Statics.eventsMap.superRemove(eventId);
         }
-        scrollBarState.restore(rightTreeViewInitialized.get());
-//        }
     }
 
     private static void synchronizedRemoveRightChild(final TreeItem<String> treeItem, @SuppressWarnings("TypeMayBeWeakened") @NotNull final ObservableList<TreeItem<String>> rootChildrenList) {
         rootChildrenList.remove(treeItem);
-
     }
 
     private static void removeManagedEvent(final String eventId, final Iterable<String> marketIds) {
@@ -771,21 +862,31 @@ public class GUI
     }
 
     private static boolean removeMarket(final String marketId) {
-        final TreeItem<String> marketTreeItem = marketsTreeItemMap.get(marketId);
-        final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL, "removeMarket " + marketId + " " + (marketTreeItem == null ? "null" : marketTreeItem.getValue()));
-        scrollBarState.save(rightTreeViewInitialized.get());
-        marketsTreeItemMap.remove(marketId);
-        final TreeItem<String> eventTreeItem = marketTreeItem == null ? null : marketTreeItem.getParent();
-        @Nullable final ObservableList<TreeItem<String>> listOfChildren = eventTreeItem == null ? null : eventTreeItem.getChildren();
-        final boolean removed = listOfChildren != null && listOfChildren.remove(marketTreeItem);
-        if (removed && eventsTreeItemMap.getKey(eventTreeItem) == null && listOfChildren.isEmpty()) { // parentEventItem is defaultEvent and it no longer has children
-            eventsTreeItemMap.removeValue(eventTreeItem);
-//            rightEventRootChildrenList.remove(eventTreeItem);
-            synchronizedRemoveRightChild(eventTreeItem, rightEventRootChildrenList);
-        } else { // parentEventItem is not defaultEvent, nothing to be done
-        }
-        scrollBarState.restore(rightTreeViewInitialized.get());
+        return removeMarket(marketId, false);
+    }
 
+    private static boolean removeMarket(final String marketId, final boolean removeAnyway) {
+        final boolean removed;
+        if (rightPanelVisible && !removeAnyway) {
+            removed = markMarketForRemoval(marketId);
+        } else {
+            final TreeItem<String> marketTreeItem = marketsTreeItemMap.get(marketId);
+            final ScrollBarState scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL, "removeMarket " + marketId + " " + (marketTreeItem == null ? "null" : marketTreeItem.getValue()));
+            scrollBarState.save(rightTreeViewInitialized.get());
+            marketsTreeItemMap.remove(marketId);
+            final TreeItem<String> eventTreeItem = marketTreeItem == null ? null : marketTreeItem.getParent();
+            @Nullable final ObservableList<TreeItem<String>> listOfChildren = eventTreeItem == null ? null : eventTreeItem.getChildren();
+            removed = listOfChildren != null && listOfChildren.remove(marketTreeItem);
+            if (removed && eventsTreeItemMap.getKey(eventTreeItem) == null && listOfChildren.isEmpty()) { // parentEventItem is defaultEvent and it no longer has children
+                eventsTreeItemMap.removeValue(eventTreeItem);
+//            rightEventRootChildrenList.remove(eventTreeItem);
+                synchronizedRemoveRightChild(eventTreeItem, rightEventRootChildrenList);
+            } else { // parentEventItem is not defaultEvent, nothing to be done
+            }
+            scrollBarState.restore(rightTreeViewInitialized.get());
+
+            Statics.marketCataloguesMap.superRemove(marketId);
+        }
         return removed;
     }
 
@@ -872,7 +973,10 @@ public class GUI
 
     static void clearRightTreeView() {
         rightTreeViewInitialized.set(false);
+
+        processMarketsForRemoval();
         processEventsForRemoval();
+
         clearMarketsRightTreeView();
 
         rightEventRootChildrenList.clear();
@@ -885,8 +989,8 @@ public class GUI
         int modified = 0;
 
         clearLeftTreeView();
-        modified += addManagedEvents();
-        modified += addManagedMarkets();
+        modified += addManagedEvents(true);
+        modified += addManagedMarkets(true);
         leftTreeViewInitialized.set(true);
 
         return modified;
@@ -905,8 +1009,8 @@ public class GUI
         } else {
             clearRightTreeView();
         }
-        modified += addEvents();
-        modified += addMarkets();
+        modified += addEvents(true);
+        modified += addMarkets(true);
         rightTreeViewInitialized.set(true);
 
         return modified;
@@ -918,7 +1022,7 @@ public class GUI
 
         clearMarketsRightTreeView();
 //        modified += addEvents();
-        modified += addMarkets();
+        modified += addMarkets(true);
 
         return modified;
     }
@@ -944,8 +1048,7 @@ public class GUI
         return treeView;
     }
 
-    @SuppressWarnings("OverlyNestedMethod")
-    private static void privateCheckTreeItemsWithNullName() { // only checks the managed items
+    private static void privateCheckTreeItemsWithNullName(final boolean isDuringInitialization) { // only checks the managed items
         for (@NotNull final TreeItem<String> eventItem : managedEventsTreeItemMap.values()) {
             final String treeName = eventItem.getValue();
             if (treeName == null || NULL_NAME.equals(treeName)) {
@@ -958,13 +1061,13 @@ public class GUI
                         final String eventName = GUIUtils.getManagedEventName(managedEvent);
                         if (eventName != null) {
                             eventItem.setValue(eventName);
-                            reorderManagedEventItem(eventItem);
+                            reorderManagedEventItem(eventItem, isDuringInitialization);
 //                            GUIUtils.triggerTreeItemRefresh(eventItem);
                             leftTreeView.refresh();
                         } else {
                             if (treeName == null) {
                                 eventItem.setValue(NULL_NAME);
-                                reorderManagedEventItem(eventItem);
+                                reorderManagedEventItem(eventItem, isDuringInitialization);
 //                                GUIUtils.triggerTreeItemRefresh(eventItem);
                                 leftTreeView.refresh();
                             } else { // I already set the NULL_NAME, nothing more to be done
@@ -987,13 +1090,13 @@ public class GUI
                         final String marketName = GUIUtils.getManagedMarketName(marketId, managedMarket);
                         if (marketName != null) {
                             marketItem.setValue(marketName);
-                            reorderManagedMarketItem(marketItem);
+                            reorderManagedMarketItem(marketItem, isDuringInitialization);
 //                            GUIUtils.triggerTreeItemRefresh(marketItem);
                             leftTreeView.refresh();
                         } else {
                             if (treeName == null) {
                                 marketItem.setValue(NULL_NAME);
-                                reorderManagedEventItem(marketItem);
+                                reorderManagedEventItem(marketItem, isDuringInitialization);
 //                                GUIUtils.triggerTreeItemRefresh(marketItem);
                                 leftTreeView.refresh();
                             } else { // I already set the NULL_NAME, nothing more to be done
@@ -1011,20 +1114,20 @@ public class GUI
         }
     }
 
-    private static int addMarkets() {
+    private static int addMarkets(final boolean isDuringInitialization) {
         int modified = 0;
         @NotNull final HashMap<String, MarketCatalogue> mapCopy = Statics.marketCataloguesMap.copy();
         for (@NotNull final Map.Entry<String, MarketCatalogue> entry : mapCopy.entrySet()) {
-            modified += addMarket(entry);
+            modified += addMarket(entry, isDuringInitialization);
         }
         return modified;
     }
 
-    private static int addManagedMarkets() {
+    private static int addManagedMarkets(final boolean isDuringInitialization) {
         int modified = 0;
         @NotNull final HashMap<String, ManagedMarket> mapCopy = Statics.rulesManager.markets.copy();
         for (@NotNull final Map.Entry<String, ManagedMarket> entry : mapCopy.entrySet()) {
-            modified += addManagedMarket(entry);
+            modified += addManagedMarket(entry, isDuringInitialization);
         }
         return modified;
     }
@@ -1035,25 +1138,35 @@ public class GUI
         return addMarket(marketId, market);
     }
 
+    @SuppressWarnings("UnusedReturnValue")
     private static int addMarket(@NotNull final Map.Entry<String, ? extends MarketCatalogue> entry) {
+        return addMarket(entry, false);
+    }
+
+    private static int addMarket(@NotNull final Map.Entry<String, ? extends MarketCatalogue> entry, final boolean isDuringInitialization) {
         final String marketId = entry.getKey();
         final MarketCatalogue market = entry.getValue();
-        return addMarket(marketId, market);
+        return addMarket(marketId, market, isDuringInitialization);
     }
 
     private static int addMarket(final String marketId, final MarketCatalogue market) {
+        return addMarket(marketId, market, false);
+    }
+
+    private static int addMarket(final String marketId, final MarketCatalogue market, final boolean isDuringInitialization) {
         int modified = 0;
+        unMarkMarketForRemoval(marketId);
         if (marketsTreeItemMap.containsKey(marketId)) { // already contained, nothing to be done, won't update the object here
         } else {
             if (market == null) {
-                logger.error("null MarketCatalogue in addMarkets for: {}", marketId);
-                Statics.marketCataloguesMap.removeValueAll(null);
+                logger.error("null MarketCatalogue in addMarket for: {}", marketId);
+                Statics.marketCataloguesMap.superRemoveValueAll(null);
             } else {
                 final String eventId = Formulas.getEventIdOfMarketCatalogue(market);
 
                 @Nullable TreeItem<String> parentItem = eventsTreeItemMap.get(eventId);
                 if (parentItem == null) { // might be ok, won't do anything
-                    parentItem = getDefaultEventAndCreateIfNotExist();
+                    parentItem = getDefaultEventAndCreateIfNotExist(isDuringInitialization);
                 } else { // I have the parentItem, nothing more to be done
                 }
                 String marketName = market.getMarketName();
@@ -1069,7 +1182,7 @@ public class GUI
                 final TreeItem<String> marketTreeItem = new TreeItem<>(marketName);
 //                marketTreeItem.setExpanded(true);
                 marketsTreeItemMap.put(marketId, marketTreeItem);
-                addTreeItem(marketTreeItem, parentItem, rightTreeView);
+                addTreeItem(marketTreeItem, parentItem, rightTreeView, isDuringInitialization);
                 modified++;
             }
         }
@@ -1088,7 +1201,7 @@ public class GUI
         final ManagedMarket managedMarket = Statics.rulesManager.markets.get(id);
         if (treeItem == null) { // no managed market, nothing to be done
         } else {
-            final String marketName = GUIUtils.marketExistsInMap(id) ? GUIUtils.getManagedMarketName(id, managedMarket) : GUIUtils.markNameAsExpired(GUIUtils.getManagedMarketName(id, managedMarket));
+            final String marketName = GUIUtils.marketExistsInMapAndNotMarkedForRemoval(id) ? GUIUtils.markNameAsNotExpired(GUIUtils.getManagedMarketName(id, managedMarket)) : GUIUtils.markNameAsExpired(GUIUtils.getManagedMarketName(id, managedMarket));
             final String treeEventName = treeItem.getValue();
             if (Objects.equals(marketName, treeEventName)) { // no need to update
             } else {
@@ -1098,12 +1211,12 @@ public class GUI
             final String eventId = managedMarket.getParentEventId(Statics.marketCataloguesMap, Statics.rulesManager.rulesHaveChanged);
             final TreeItem<String> parentEventTreeItem = managedEventsTreeItemMap.get(eventId);
 //            logger.info("updateManagedMarket: {} {} {}", id, eventId, parentEventTreeItem);
-            final ManagedEvent managedEvent = managedMarket.getParentEvent(Statics.marketCataloguesMap, Statics.rulesManager.events, Statics.rulesManager.markets, Statics.rulesManager.rulesHaveChanged);
+            final ManagedEvent managedEvent = managedMarket.getParentEvent(Statics.marketCataloguesMap, Statics.rulesManager);
 //            logger.info("updateManagedMarket: {} {}", id, managedEvent == null ? null : managedEvent.getId());
             if (parentEventTreeItem == null || managedEvent == null) { // no parentEvent present or found, nothing to be done
             } else {
 //                logger.info("updateManagedMarket: {} {}", id, eventId);
-                checkManagedMarketsOnDefaultNode(managedEvent, parentEventTreeItem);
+                checkManagedMarketsOnDefaultNode(managedEvent, parentEventTreeItem, false);
             }
         }
     }
@@ -1114,13 +1227,23 @@ public class GUI
         return addManagedMarket(marketId, managedMarket);
     }
 
+    @SuppressWarnings("unused")
     private static int addManagedMarket(@NotNull final Map.Entry<String, ? extends ManagedMarket> entry) {
+        return addManagedMarket(entry, false);
+    }
+
+    private static int addManagedMarket(@NotNull final Map.Entry<String, ? extends ManagedMarket> entry, final boolean isDuringInitialization) {
         final String marketId = entry.getKey();
         final ManagedMarket managedMarket = entry.getValue();
-        return addManagedMarket(marketId, managedMarket);
+        return addManagedMarket(marketId, managedMarket, isDuringInitialization);
     }
 
     private static int addManagedMarket(final String marketId, final ManagedMarket managedMarket) {
+        return addManagedMarket(marketId, managedMarket, false);
+
+    }
+
+    private static int addManagedMarket(final String marketId, final ManagedMarket managedMarket, final boolean isDuringInitialization) {
         int modified = 0;
         if (managedMarketsTreeItemMap.containsKey(marketId)) { // already contained, nothing to be done, won't update the object here
         } else {
@@ -1132,15 +1255,16 @@ public class GUI
 
                 @Nullable TreeItem<String> parentItem = managedEventsTreeItemMap.get(eventId);
                 if (parentItem == null) {
-                    parentItem = getDefaultManagedEventAndCreateIfNotExist();
+                    parentItem = getDefaultManagedEventAndCreateIfNotExist(isDuringInitialization);
                 } else { // I have the parentItem, nothing more to be done
                 }
 
-                final String marketName = GUIUtils.marketExistsInMap(marketId) ? GUIUtils.getManagedMarketName(marketId, managedMarket) : GUIUtils.markNameAsExpired(GUIUtils.getManagedMarketName(marketId, managedMarket));
+                final String marketName = GUIUtils.marketExistsInMapAndNotMarkedForRemoval(marketId) ?
+                                          GUIUtils.markNameAsNotExpired(GUIUtils.getManagedMarketName(marketId, managedMarket)) : GUIUtils.markNameAsExpired(GUIUtils.getManagedMarketName(marketId, managedMarket));
                 final TreeItem<String> marketTreeItem = new TreeItem<>(marketName);
                 marketTreeItem.setExpanded(true);
                 managedMarketsTreeItemMap.put(marketId, marketTreeItem);
-                addTreeItem(marketTreeItem, parentItem, leftTreeView);
+                addTreeItem(marketTreeItem, parentItem, leftTreeView, isDuringInitialization);
                 modified++;
             }
         }
@@ -1149,7 +1273,7 @@ public class GUI
     }
 
     @NotNull
-    private static TreeItem<String> getDefaultEventAndCreateIfNotExist() {
+    private static TreeItem<String> getDefaultEventAndCreateIfNotExist(final boolean isDuringInitialization) {
         TreeItem<String> defaultEvent = eventsTreeItemMap.get(null);
         if (defaultEvent == null) {
             defaultEvent = new TreeItem<>(DEFAULT_EVENT_NAME);
@@ -1158,7 +1282,7 @@ public class GUI
 
             final String filterValue = currentFilterValue.get();
             if (filterValue == null || filterValue.isEmpty()) {
-                addTreeItem(defaultEvent, rightEventTreeRoot, rightTreeView);
+                addTreeItem(defaultEvent, rightEventTreeRoot, rightTreeView, isDuringInitialization);
             } else { // won't add default event when a filter is active
             }
         } else { // I have the defaultEvent, nothing more to be done
@@ -1167,41 +1291,51 @@ public class GUI
     }
 
     @NotNull
-    private static TreeItem<String> getDefaultManagedEventAndCreateIfNotExist() {
+    private static TreeItem<String> getDefaultManagedEventAndCreateIfNotExist(final boolean isDuringInitialization) {
         TreeItem<String> defaultEvent = managedEventsTreeItemMap.get(null);
         if (defaultEvent == null) {
             defaultEvent = new TreeItem<>(DEFAULT_EVENT_NAME);
             defaultEvent.setExpanded(true);
             managedEventsTreeItemMap.put(null, defaultEvent);
-            addTreeItem(defaultEvent, leftEventTreeRoot, leftTreeView);
+            addTreeItem(defaultEvent, leftEventTreeRoot, leftTreeView, isDuringInitialization);
         } else { // I have the defaultEvent, nothing more to be done
         }
         return defaultEvent;
     }
 
-    private static int addEvents() {
+    private static int addEvents(final boolean isDuringInitialization) {
         int modified = 0;
         @NotNull final HashMap<String, Event> mapCopy = Statics.eventsMap.copy();
         for (@NotNull final Map.Entry<String, Event> entry : mapCopy.entrySet()) {
-            modified += addEvent(entry);
+            modified += addEvent(entry, isDuringInitialization);
         }
         return modified;
     }
 
+    @SuppressWarnings("UnusedReturnValue")
     private static int addEvent(@NotNull final Map.Entry<String, ? extends Event> entry) {
-        final String eventId = entry.getKey();
-        final Event event = entry.getValue();
-        return addEvent(eventId, event);
+        return addEvent(entry, false);
     }
 
+    private static int addEvent(@NotNull final Map.Entry<String, ? extends Event> entry, final boolean isDuringInitialization) {
+        final String eventId = entry.getKey();
+        final Event event = entry.getValue();
+        return addEvent(eventId, event, isDuringInitialization);
+    }
+
+    @SuppressWarnings("UnusedReturnValue")
     private static int addEvent(final String eventId, final Event event) {
+        return addEvent(eventId, event, false);
+    }
+
+    private static int addEvent(final String eventId, final Event event, final boolean isDuringInitialization) {
         int modified = 0;
         unMarkEventForRemoval(eventId);
         if (eventsTreeItemMap.containsKey(eventId)) { // already contained, nothing to be done, won't update the object here
         } else {
             if (event == null) {
                 logger.error("null Event in addEvent for: {}", eventId);
-                Statics.eventsMap.removeValueAll(null);
+                Statics.eventsMap.superRemoveValueAll(null);
             } else {
                 final String eventName = event.getName();
                 final String filterValue = currentFilterValue.get();
@@ -1210,11 +1344,11 @@ public class GUI
                 eventsTreeItemMap.put(eventId, eventTreeItem);
                 if (Statics.unsupportedEventNames.contains(eventName)) { // won't add eventTreeItem to the treeView
                 } else if (filterValue == null || filterValue.isEmpty() || StringUtils.containsIgnoreCase(eventName, filterValue)) {
-                    addTreeItem(eventTreeItem, rightEventTreeRoot, rightTreeView);
+                    addTreeItem(eventTreeItem, rightEventTreeRoot, rightTreeView, isDuringInitialization);
                 } else { // not added because of filter
                 }
 
-                modified += checkMarketsOnDefaultNode(event, eventTreeItem);
+                modified += checkMarketsOnDefaultNode(event, eventTreeItem, isDuringInitialization);
 
                 modified++;
             }
@@ -1228,9 +1362,9 @@ public class GUI
         } else {
             managedTreeItem.setValue(GUIUtils.markNameAsExpired(managedTreeItem.getValue()));
             if (isEvent) {
-                reorderManagedEventItem(managedTreeItem);
+                reorderManagedEventItem(managedTreeItem, false);
             } else {
-                reorderManagedMarketItem(managedTreeItem);
+                reorderManagedMarketItem(managedTreeItem, false);
             }
 //            GUIUtils.triggerTreeItemRefresh(managedTreeItem);
             leftTreeView.refresh();
@@ -1256,9 +1390,9 @@ public class GUI
         } else {
             managedTreeItem.setValue(GUIUtils.markNameAsNotExpired(managedTreeItem.getValue()));
             if (isEvent) {
-                reorderManagedEventItem(managedTreeItem);
+                reorderManagedEventItem(managedTreeItem, false);
             } else {
-                reorderManagedMarketItem(managedTreeItem);
+                reorderManagedMarketItem(managedTreeItem, false);
             }
 //            GUIUtils.triggerTreeItemRefresh(managedTreeItem);
             leftTreeView.refresh();
@@ -1279,27 +1413,37 @@ public class GUI
 
     private static void updateManagedEvent(final String id) {
         final TreeItem<String> treeItem = managedEventsTreeItemMap.get(id);
-        final ManagedEvent managedEvent = Statics.rulesManager.events.get(id);
         if (treeItem == null) { // no managed event, nothing to be done
         } else {
-            final String eventName = GUIUtils.eventExistsInMap(id) ? GUIUtils.getManagedEventName(managedEvent) : GUIUtils.markNameAsExpired(GUIUtils.getManagedEventName(managedEvent));
+            final ManagedEvent managedEvent = Statics.rulesManager.events.get(id);
+            final String eventName = GUIUtils.eventExistsInMapAndNotMarkedForRemoval(id) ? GUIUtils.markNameAsNotExpired(GUIUtils.getManagedEventName(managedEvent)) : GUIUtils.markNameAsExpired(GUIUtils.getManagedEventName(managedEvent));
             final String treeEventName = treeItem.getValue();
             if (Objects.equals(eventName, treeEventName)) { // no need to update
             } else {
                 treeItem.setValue(eventName);
             }
 
-            checkManagedMarketsOnDefaultNode(managedEvent, treeItem);
+            checkManagedMarketsOnDefaultNode(managedEvent, treeItem, false);
         }
     }
 
+    @SuppressWarnings("unused")
     private static int addManagedEvent(@NotNull final Map.Entry<String, ? extends ManagedEvent> entry) {
-        final String eventId = entry.getKey();
-        final ManagedEvent managedEvent = entry.getValue();
-        return addManagedEvent(eventId, managedEvent);
+        return addManagedEvent(entry, false);
     }
 
+    private static int addManagedEvent(@NotNull final Map.Entry<String, ? extends ManagedEvent> entry, final boolean isDuringInitialization) {
+        final String eventId = entry.getKey();
+        final ManagedEvent managedEvent = entry.getValue();
+        return addManagedEvent(eventId, managedEvent, isDuringInitialization);
+    }
+
+    @SuppressWarnings("UnusedReturnValue")
     private static int addManagedEvent(final String eventId, final ManagedEvent managedEvent) {
+        return addManagedEvent(eventId, managedEvent, false);
+    }
+
+    private static int addManagedEvent(final String eventId, final ManagedEvent managedEvent, final boolean isDuringInitialization) {
         int modified = 0;
         if (managedEventsTreeItemMap.containsKey(eventId)) { // already contained, nothing to be done, won't update the object here
         } else {
@@ -1307,29 +1451,29 @@ public class GUI
                 logger.error("null ManagedEvent in addManagedEvent for: {}", eventId);
                 Statics.rulesManager.events.removeValueAll(null);
             } else {
-                final String eventName = GUIUtils.eventExistsInMap(eventId) ? GUIUtils.getManagedEventName(managedEvent) : GUIUtils.markNameAsExpired(GUIUtils.getManagedEventName(managedEvent));
+                final String eventName = GUIUtils.eventExistsInMapAndNotMarkedForRemoval(eventId) ? GUIUtils.markNameAsNotExpired(GUIUtils.getManagedEventName(managedEvent)) : GUIUtils.markNameAsExpired(GUIUtils.getManagedEventName(managedEvent));
                 final TreeItem<String> eventTreeItem = new TreeItem<>(eventName);
                 eventTreeItem.setExpanded(true);
                 managedEventsTreeItemMap.put(eventId, eventTreeItem);
 
-                addTreeItem(eventTreeItem, leftEventTreeRoot, leftTreeView);
-                modified += checkManagedMarketsOnDefaultNode(managedEvent, eventTreeItem);
+                addTreeItem(eventTreeItem, leftEventTreeRoot, leftTreeView, isDuringInitialization);
+                modified += checkManagedMarketsOnDefaultNode(managedEvent, eventTreeItem, isDuringInitialization);
                 modified++;
             }
         }
         return modified;
     }
 
-    private static int addManagedEvents() {
+    private static int addManagedEvents(final boolean isDuringInitialization) {
         int modified = 0;
         @NotNull final HashMap<String, ManagedEvent> mapCopy = Statics.rulesManager.events.copy();
         for (@NotNull final Map.Entry<String, ManagedEvent> entry : mapCopy.entrySet()) {
-            modified += addManagedEvent(entry);
+            modified += addManagedEvent(entry, isDuringInitialization);
         }
         return modified;
     }
 
-    private static int checkMarketsOnDefaultNode(@NotNull final Event event, @NotNull final TreeItem<String> eventTreeItem) {
+    private static int checkMarketsOnDefaultNode(@NotNull final Event event, @NotNull final TreeItem<String> eventTreeItem, final boolean isDuringInitialization) {
         int modified = 0;
         final TreeItem<String> defaultEvent = eventsTreeItemMap.get(null);
         if (defaultEvent != null) {
@@ -1347,7 +1491,7 @@ public class GUI
             for (final TreeItem<String> marketTreeItem : marketsToMove) {
 //                defaultChildrenList.remove(marketTreeItem);
                 synchronizedRemoveRightChild(marketTreeItem, defaultChildrenList);
-                addTreeItem(marketTreeItem, eventTreeItem, rightTreeView);
+                addTreeItem(marketTreeItem, eventTreeItem, rightTreeView, isDuringInitialization);
                 modified++;
             }
 
@@ -1362,7 +1506,7 @@ public class GUI
         return modified;
     }
 
-    private static int checkManagedMarketsOnDefaultNode(@NotNull final ManagedEvent managedEvent, @NotNull final TreeItem<String> eventTreeItem) {
+    private static int checkManagedMarketsOnDefaultNode(@NotNull final ManagedEvent managedEvent, @NotNull final TreeItem<String> eventTreeItem, final boolean isDuringInitialization) {
         int modified = 0;
         final TreeItem<String> defaultEvent = managedEventsTreeItemMap.get(null);
         if (defaultEvent != null) {
@@ -1380,7 +1524,7 @@ public class GUI
                 }
                 for (final TreeItem<String> marketTreeItem : marketsToMove) {
                     defaultChildrenList.remove(marketTreeItem);
-                    addTreeItem(marketTreeItem, eventTreeItem, leftTreeView);
+                    addTreeItem(marketTreeItem, eventTreeItem, leftTreeView, isDuringInitialization);
                     modified++;
                 }
 
@@ -1396,53 +1540,86 @@ public class GUI
         return modified;
     }
 
-    private static void reorderManagedEventItem(@NotNull final TreeItem<String> eventItem) {
+    private static void reorderManagedEventItem(@NotNull final TreeItem<String> eventItem, final boolean isDuringInitialization) {
         leftEventRootChildrenList.remove(eventItem);
-        addTreeItem(eventItem, leftEventTreeRoot, leftTreeView);
+        addTreeItem(eventItem, leftEventTreeRoot, leftTreeView, isDuringInitialization);
     }
 
-    private static void reorderManagedMarketItem(@NotNull final TreeItem<String> marketItem) {
+    private static void reorderManagedMarketItem(@NotNull final TreeItem<String> marketItem, final boolean isDuringInitialization) {
         final TreeItem<String> parent = marketItem.getParent();
         if (parent == null) {
             logger.error("null parent during reorderManagedMarketItem for: {} {}", managedMarketsTreeItemMap.getKey(marketItem), marketItem);
         } else {
             @NotNull final ObservableList<TreeItem<String>> parentChildren = parent.getChildren();
             parentChildren.remove(marketItem);
-            addTreeItem(marketItem, parent, leftTreeView);
+            addTreeItem(marketItem, parent, leftTreeView, isDuringInitialization);
         }
     }
 
-    private static void addTreeItem(@NotNull final TreeItem<String> treeItem, @NotNull final TreeItem<String> root, @NotNull final TreeView<String> treeView) {
+    private static int findIndexToBeInserted(@NotNull final ObservableList<TreeItem<String>> rootChildrenList, @NotNull final TreeItem<String> treeItem, final int start, final int end) {
+        final int result;
+        if (start > end) { // length 0
+            result = -1; // append at end
+        } else if (start == end) {
+            final int compareResult = treeItemCompare(rootChildrenList.get(start), treeItem);
+            if (compareResult >= 0) {
+                result = start;
+            } else {
+                result = -1; // append at end
+            }
+        } else {
+            final int mid = (start + end) / 2;
+            final int compareResult1 = treeItemCompare(rootChildrenList.get(mid), treeItem), compareResult2 = treeItemCompare(rootChildrenList.get(mid + 1), treeItem);
+
+            if (compareResult1 <= 0 && compareResult2 >= 0) {
+                result = mid + 1;
+            } else if (compareResult1 < 0) {
+                result = findIndexToBeInserted(rootChildrenList, treeItem, mid + 1, end);
+            } else {
+                result = findIndexToBeInserted(rootChildrenList, treeItem, start, mid);
+            }
+        }
+
+        return result;
+    }
+
+    private static void addTreeItem(@NotNull final TreeItem<String> treeItem, @NotNull final TreeItem<String> root, @NotNull final TreeView<String> treeView, final boolean isDuringInitialization) {
         @NotNull final ObservableList<TreeItem<String>> rootChildrenList = root.getChildren();
         final int size = rootChildrenList.size();
         boolean added = false;
-        final ScrollBarState scrollBarState;
+        @Nullable final ScrollBarState scrollBarState;
         final boolean isRightTree = isRightTreeView(treeView);
-        if (isRightTree) {
+        if (isDuringInitialization) {
+            scrollBarState = null;
+        } else if (isRightTree) {
             scrollBarState = new ScrollBarState(rightTreeView, Orientation.VERTICAL, "addTreeItem " + treeItem.getValue() + " isRightTree:" + isRightTree);
             scrollBarState.save(rightTreeViewInitialized.get());
         } else {
             scrollBarState = new ScrollBarState(leftTreeView, Orientation.VERTICAL, "addTreeItem " + treeItem.getValue() + " isRightTree:" + isRightTree);
             scrollBarState.save(leftTreeViewInitialized.get());
         }
-        for (int i = 0; i < size; i++) {
-            if (treeItemCompare(rootChildrenList.get(i), treeItem) >= 0) {
-                synchronizedAddRootChild(treeItem, rootChildrenList, i, treeView);
-//                rootChildrenList.add(i, treeItem);
-                added = true;
-                break;
-            } else { // will continue, nothing to be done yet
-            }
-        }
-        if (added) { // added, nothing to be done
-        } else { // placed at the end of the list
-            synchronizedAddRootChild(treeItem, rootChildrenList, treeView);
-//            rootChildrenList.add(treeItem);
-        }
+//        for (int i = 0; i < size; i++) {
+//            if (treeItemCompare(rootChildrenList.get(i), treeItem) >= 0) {
+//                synchronizedAddRootChild(treeItem, rootChildrenList, i, treeView);
+////                rootChildrenList.add(i, treeItem);
+//                added = true;
+//                break;
+//            } else { // will continue, nothing to be done yet
+//            }
+//        }
+//        if (added) { // added, nothing to be done
+//        } else { // placed at the end of the list
+//            synchronizedAddRootChild(treeItem, rootChildrenList, treeView);
+////            rootChildrenList.add(treeItem);
+//        }
+        final int positionToInsertAt = findIndexToBeInserted(rootChildrenList, treeItem, 0, size - 1);
+        synchronizedAddRootChild(treeItem, rootChildrenList, positionToInsertAt, treeView);
+
         final SelectionModel<TreeItem<String>> selectionModel = treeView.getSelectionModel();
         final TreeItem<String> selectedItem = selectionModel.getSelectedItem();
         final TreeItem<String> parentItem = treeItem.getParent();
-        if (parentItem == selectedItem) {
+        if (isDuringInitialization) { // no need to scroll nor to restore scrollBarState
+        } else if (parentItem == selectedItem) {
             treeView.scrollTo(selectionModel.getSelectedIndex());
         } else { // no need to scroll
             if (isRightTree) {
@@ -1466,7 +1643,7 @@ public class GUI
         }
     }
 
-    private static void simpleAddRootChild(@NotNull final TreeItem<String> treeItem, @SuppressWarnings({"BoundedWildcard", "TypeMayBeWeakened"}) @NotNull final ObservableList<TreeItem<String>> rootChildrenList, final int position) {
+    private static void simpleAddRootChild(@NotNull final TreeItem<String> treeItem, @SuppressWarnings("TypeMayBeWeakened") @NotNull final ObservableList<TreeItem<String>> rootChildrenList, final int position) {
         if (position >= 0) {
             rootChildrenList.add(position, treeItem);
         } else {
@@ -1549,47 +1726,54 @@ public class GUI
 
     @SuppressWarnings("ValueOfIncrementOrDecrementUsed")
     private static void showManagedEvent(final String eventId, final TreeItem<String> currentEvent) {
-        currentlyShownManagedObject = currentEvent;
-        mainGridPane.getChildren().clear();
-        // eventName(ManagedEvent or newValue), amountLimit/simpleAmountLimit(ManagedEvent), nManagedMarkets(ManagedEvent or nChildren of TreeItem), nTotalMarkets(Event), "open for" timer, starting at "open date"(Event)
-        final ManagedEvent managedEvent = Statics.rulesManager.events.get(eventId);
-        if (managedEvent == null) {
-            logger.error("null managedEvent in left listener for: {} {}", currentEvent, eventId);
+        if (refreshPaused.get()) { // refresh is paused, refresh will happen when pause ends
+            refreshQueued.set(true);
         } else {
-            final Event event = Statics.eventsMap.get(eventId);
-            final String eventName = currentEvent.getValue();
-            final double simpleAmountLimit = managedEvent.getSimpleAmountLimit();
-            final double calculatedAmountLimit = managedEvent.getAmountLimit(Statics.existingFunds);
-            final int nManagedMarkets = currentEvent.getChildren().size();
-            final int nTotalMarkets = event == null ? -1 : event.getMarketCount();
-            final Date eventOpenTime = event == null ? null : event.getOpenDate();
+            currentlyShownManagedObject = currentEvent;
+            mainGridPane.getChildren().clear();
+            // eventName(ManagedEvent or newValue), amountLimit/simpleAmountLimit(ManagedEvent), nManagedMarkets(ManagedEvent or nChildren of TreeItem), nTotalMarkets(Event), "open for" timer, starting at "open date"(Event)
+            final ManagedEvent managedEvent = Statics.rulesManager.events.get(eventId);
+            if (managedEvent == null) {
+                logger.error("null managedEvent in left listener for: {} {}", currentEvent, eventId);
+            } else {
+                final Event event = Statics.eventsMap.get(eventId);
+                updateEventName(currentEvent, eventId, managedEvent);
+                final String eventName = currentEvent.getValue();
+                final double simpleAmountLimit = managedEvent.getSimpleAmountLimit();
+                final double calculatedAmountLimit = managedEvent.getAmountLimit(Statics.existingFunds);
+                final int nManagedMarkets = currentEvent.getChildren().size();
+                final int nTotalMarkets = event == null ? -1 : event.getMarketCount();
+                final Date eventOpenTime = event == null ? null : event.getOpenDate();
 
-            final Label eventNameLabel = new Label(eventName);
-            final Label eventIdLabel = new Label(eventId);
-            final TextField simpleAmountLimitNode = new TextField(decimalFormatTextField.format(Generic.keepDoubleWithinRange(simpleAmountLimit)));
-            final Label calculatedAmountLimitLabel = new Label("€ " + decimalFormatLabelLow.format(calculatedAmountLimit));
-            final Label nManagedMarketsLabel = new Label(String.valueOf(nManagedMarkets));
-            final Label nTotalMarketsLabel = new Label(String.valueOf(nTotalMarkets));
-            final Label eventOpenTimeLabel = new Label(eventOpenTime == null ? null : eventOpenTime.toString());
+                final Label eventNameLabel = new Label(eventName);
+                final Label eventIdLabel = new Label(eventId);
+                final TextField simpleAmountLimitNode = new TextField(decimalFormatTextField.format(Generic.keepDoubleWithinRange(simpleAmountLimit)));
+                final Label calculatedAmountLimitLabel = new Label("€ " + decimalFormatLabelLow.format(calculatedAmountLimit));
+                final Label nManagedMarketsLabel = new Label(String.valueOf(nManagedMarkets));
+                final Label nTotalMarketsLabel = new Label(String.valueOf(nTotalMarkets));
+                final Label eventOpenTimeLabel = new Label(eventOpenTime == null ? null : eventOpenTime.toString());
 
-            GUIUtils.setOnKeyPressedTextField(simpleAmountLimitNode, simpleAmountLimit, RulesManagerModificationCommand.setEventAmountLimit, eventId);
-            GUIUtils.handleDoubleTextField(simpleAmountLimitNode, simpleAmountLimit);
+                GUIUtils.setOnKeyPressedTextField(eventId, simpleAmountLimitNode, simpleAmountLimit, RulesManagerModificationCommand.setEventAmountLimit, eventId);
+                GUIUtils.handleDoubleTextField(simpleAmountLimitNode, simpleAmountLimit);
 
-            int rowIndex = 0;
-            mainGridPane.add(eventNamePreLabel, 0, rowIndex);
-            mainGridPane.add(eventNameLabel, 1, rowIndex++);
-            mainGridPane.add(eventIdPreLabel, 0, rowIndex);
-            mainGridPane.add(eventIdLabel, 1, rowIndex++);
-            mainGridPane.add(simpleAmountLimitLabel, 0, rowIndex);
-            mainGridPane.add(simpleAmountLimitNode, 1, rowIndex++);
-            mainGridPane.add(calculatedAmountLimitPreLabel, 0, rowIndex);
-            mainGridPane.add(calculatedAmountLimitLabel, 1, rowIndex++);
-            mainGridPane.add(nManagedMarketsPreLabel, 0, rowIndex);
-            mainGridPane.add(nManagedMarketsLabel, 1, rowIndex++);
-            mainGridPane.add(nTotalMarketsPreLabel, 0, rowIndex);
-            mainGridPane.add(nTotalMarketsLabel, 1, rowIndex++);
-            mainGridPane.add(eventOpenTimePreLabel, 0, rowIndex);
-            mainGridPane.add(eventOpenTimeLabel, 1, rowIndex);
+                int rowIndex = 0;
+                mainGridPane.add(eventNamePreLabel, 0, rowIndex);
+                mainGridPane.add(eventNameLabel, 1, rowIndex++);
+                mainGridPane.add(eventIdPreLabel, 0, rowIndex);
+                mainGridPane.add(eventIdLabel, 1, rowIndex++);
+                mainGridPane.add(simpleAmountLimitLabel, 0, rowIndex);
+                mainGridPane.add(simpleAmountLimitNode, 1, rowIndex++);
+                focusGridNode(simpleAmountLimitNode, eventId, 1, rowIndex - 1);
+
+                mainGridPane.add(calculatedAmountLimitPreLabel, 0, rowIndex);
+                mainGridPane.add(calculatedAmountLimitLabel, 1, rowIndex++);
+                mainGridPane.add(nManagedMarketsPreLabel, 0, rowIndex);
+                mainGridPane.add(nManagedMarketsLabel, 1, rowIndex++);
+                mainGridPane.add(nTotalMarketsPreLabel, 0, rowIndex);
+                mainGridPane.add(nTotalMarketsLabel, 1, rowIndex++);
+                mainGridPane.add(eventOpenTimePreLabel, 0, rowIndex);
+                mainGridPane.add(eventOpenTimeLabel, 1, rowIndex);
+            }
         }
     }
 
@@ -1615,24 +1799,30 @@ public class GUI
         final double layAmountLimit = managedRunner == null ? -1d : managedRunner.simpleGetLayAmountLimit();
         final double minBackOdds = managedRunner == null ? -1d : managedRunner.getMinBackOdds();
         final double maxLayOdds = managedRunner == null ? -1d : managedRunner.getMaxLayOdds();
-        final OrderMarketRunner orderMarketRunner = Statics.orderCache.getOrderMarketRunner(marketId, runnerId);
+//        final OrderMarketRunner orderMarketRunner = SharedStatics.orderCache.getOrderMarketRunner(marketId, runnerId);
 //        if (orderMarketRunner == null) { // no orderMarketRunner present, which means no orders placed on this runner, normal behavior
 //        } else {
         if (managedRunner == null) { // normal, nothing to be done
         } else {
-            managedRunner.getExposure(Statics.orderCache.markets, Statics.pendingOrdersThread);
+//            managedRunner.updateExposure();
+            SharedStatics.orderCache.updateExposure(managedRunner);
         }
 //        }
         final double matchedBackExposure = managedRunner == null ? 0d : managedRunner.getBackMatchedExposure();
         final double matchedLayExposure = managedRunner == null ? 0d : managedRunner.getLayMatchedExposure();
-        final double totalBackExposure = managedRunner == null ? 0d : managedRunner.getTotalBackExposure();
-        final double totalLayExposure = managedRunner == null ? 0d : managedRunner.getTotalLayExposure();
+        final double totalBackExposure = managedRunner == null ? 0d : managedRunner.getBackTotalExposure();
+        final double totalLayExposure = managedRunner == null ? 0d : managedRunner.getLayTotalExposure();
         final double runnerTotalValueTraded = marketRunner == null ? 0d : marketRunner.getTvEUR(Statics.existingFunds.currencyRate);
         final double lastTradedPrice = marketRunner == null ? 0d : marketRunner.getLtp();
-        final TreeMap<Double, Double> availableToLay = marketRunner == null ? null : marketRunner.getAvailableToLay(Statics.existingFunds.currencyRate);
-        final TreeMap<Double, Double> availableToBack = marketRunner == null ? null : marketRunner.getAvailableToBack(Statics.existingFunds.currencyRate);
-        final TreeMap<Double, Double> myUnmatchedLay = orderMarketRunner == null ? null : orderMarketRunner.getUnmatchedLayAmounts();
-        final TreeMap<Double, Double> myUnmatchedBack = orderMarketRunner == null ? null : orderMarketRunner.getUnmatchedBackAmounts();
+        final TreeMap<Double, Double> availableToLay = marketRunner == null ? null : marketRunner.getAvailableToLay(Statics.existingFunds.currencyRate).getOrders();
+        final TreeMap<Double, Double> availableToBack = marketRunner == null ? null : marketRunner.getAvailableToBack(Statics.existingFunds.currencyRate).getOrders();
+//        final TreeMap<Double, Double> myUnmatchedLay = orderMarketRunner == null ? null : orderMarketRunner.getUnmatchedLayAmounts();
+//        final TreeMap<Double, Double> myUnmatchedBack = orderMarketRunner == null ? null : orderMarketRunner.getUnmatchedBackAmounts();
+        final TreeMap<Double, Double> myUnmatchedLay = SharedStatics.orderCache.getUnmatchedLayAmounts(marketId, runnerId).getOrders();
+        final TreeMap<Double, Double> myUnmatchedBack = SharedStatics.orderCache.getUnmatchedBackAmounts(marketId, runnerId).getOrders();
+        final Collection<TemporaryOrder> myTempOrders = SharedStatics.orderCache.getTempOrders(marketId, runnerId);
+        final boolean mandatoryPlace = managedRunner != null && managedRunner.isMandatoryPlace(); // this appears both when the market and when the runner have this setting
+        final PrefSide prefSide = managedRunner == null ? null : managedRunner.getPrefSide();
 
         final Label runnerNameLabel = new Label(runnerName == null ? "null" : runnerName);
         final TextField backAmountLimitNode = new TextField(decimalFormatTextField.format(Generic.keepDoubleWithinRange(backAmountLimit)));
@@ -1649,6 +1839,10 @@ public class GUI
 //        final Label totalLayExposureLabel = new Label(String.valueOf(totalLayExposure));
         final Label compositeExposureLabel = new Label("bExp:" + GUIUtils.decimalFormat(totalBackExposure) + "(" + GUIUtils.decimalFormat(matchedBackExposure) + ") lExp:" + GUIUtils.decimalFormat(totalLayExposure) + "(" +
                                                        GUIUtils.decimalFormat(matchedLayExposure) + ")");
+        @SuppressWarnings("SpellCheckingInspection") final Label mandatoryPlaceLabel = new Label("Mand plac:");
+        mandatoryPlaceLabel.setContentDisplay(ContentDisplay.RIGHT);
+        @SuppressWarnings("NestedConditionalExpression") final Button prefSideButton = new Button(prefSide == PrefSide.BACK ? "Pref BACK" : prefSide == PrefSide.LAY ? "Pref LAY" : "Pref NONE");
+
         final Label runnerTotalValueTradedLabel = new Label("tv: €" + GUIUtils.decimalFormat(runnerTotalValueTraded));
         runnerTotalValueTradedLabel.setPadding(new Insets(0, 10, 0, 0));
         final Label lastTradedPriceLabel = new Label("ltp: " + decimalFormatLabelLow.format(lastTradedPrice));
@@ -1702,19 +1896,22 @@ public class GUI
             GUIUtils.setCenterLabel(availableToLayLabel[counter]);
         }
 
-        GUIUtils.setOnKeyPressedTextField(backAmountLimitNode, backAmountLimit, RulesManagerModificationCommand.setBackAmountLimit, marketId, runnerId);
+        GUIUtils.setOnKeyPressedTextField(marketId, backAmountLimitNode, backAmountLimit, RulesManagerModificationCommand.setBackAmountLimit, marketId, runnerId);
         GUIUtils.handleDoubleTextField(backAmountLimitNode, backAmountLimit);
-        GUIUtils.setOnKeyPressedTextField(layAmountLimitNode, layAmountLimit, RulesManagerModificationCommand.setLayAmountLimit, marketId, runnerId);
+        GUIUtils.setOnKeyPressedTextField(marketId, layAmountLimitNode, layAmountLimit, RulesManagerModificationCommand.setLayAmountLimit, marketId, runnerId);
         GUIUtils.handleDoubleTextField(layAmountLimitNode, layAmountLimit);
-        GUIUtils.setOnKeyPressedTextFieldOdds(Side.B, minBackOddsNode, focusedColumnIndex, focusedRowIndex, minBackOdds, RulesManagerModificationCommand.setMinBackOdds, marketId, runnerId);
+        GUIUtils.setOnKeyPressedTextFieldOdds(marketId, Side.B, minBackOddsNode, focusPosition, minBackOdds, RulesManagerModificationCommand.setMinBackOdds, marketId, runnerId);
         GUIUtils.handleDoubleTextField(minBackOddsNode, minBackOdds);
-        GUIUtils.setOnKeyPressedTextFieldOdds(Side.L, maxLayOddsNode, focusedColumnIndex, focusedRowIndex, maxLayOdds, RulesManagerModificationCommand.setMaxLayOdds, marketId, runnerId);
+        GUIUtils.setOnKeyPressedTextFieldOdds(marketId, Side.L, maxLayOddsNode, focusPosition, maxLayOdds, RulesManagerModificationCommand.setMaxLayOdds, marketId, runnerId);
         GUIUtils.handleDoubleTextField(maxLayOddsNode, maxLayOdds);
 
         int columnIndex = 2;
         mainGridPane.add(runnerNameLabel, columnIndex++, runnerRowIndex);
         mainGridPane.add(isActive ? backAmountLimitNode : new Label("inactive"), columnIndex++, runnerRowIndex);
+        focusGridNode(backAmountLimitNode, marketId, columnIndex - 1, runnerRowIndex);
         mainGridPane.add(isActive ? minBackOddsNode : new Label("inact"), columnIndex++, runnerRowIndex);
+        focusGridNode(minBackOddsNode, marketId, columnIndex - 1, runnerRowIndex);
+
         for (int i = N_PRICE_CELLS - 1; i >= 0; i--) {
             mainGridPane.add(availableToBackLabel[i], columnIndex++, runnerRowIndex);
             if (i == 0) {
@@ -1732,29 +1929,134 @@ public class GUI
             }
         }
         mainGridPane.add(isActive ? maxLayOddsNode : new Label("inact"), columnIndex++, runnerRowIndex);
+        focusGridNode(maxLayOddsNode, marketId, columnIndex - 1, runnerRowIndex);
         mainGridPane.add(isActive ? layAmountLimitNode : new Label("inactive"), columnIndex++, runnerRowIndex);
+        focusGridNode(layAmountLimitNode, marketId, columnIndex - 1, runnerRowIndex);
+
         mainGridPane.add(lastTradedPriceLabel, columnIndex++, runnerRowIndex);
         mainGridPane.add(runnerTotalValueTradedLabel, columnIndex++, runnerRowIndex);
-        mainGridPane.add(compositeExposureLabel, columnIndex, runnerRowIndex);
+        mainGridPane.add(compositeExposureLabel, columnIndex++, runnerRowIndex);
+        mainGridPane.add(isActive ? mandatoryPlaceLabel : new Label("inactive"), columnIndex++, runnerRowIndex);
+
+        //noinspection StaticVariableUsedBeforeInitialization
+        GUIUtils.standardCheckBoxFactory(mainStage, mandatoryPlaceLabel, marketId, runnerId, runnerName, mandatoryPlace, RulesManagerModificationCommand.setRunnerMandatoryPlace, "mandatoryPlace");
+
+        mainGridPane.add(isActive ? prefSideButton : new Label("inactive"), columnIndex, runnerRowIndex);
+        final ButtonType back = new ButtonType("BACK", ButtonBar.ButtonData.APPLY);
+        final ButtonType lay = new ButtonType("LAY", ButtonBar.ButtonData.RIGHT);
+        final ButtonType none = new ButtonType("NONE", ButtonBar.ButtonData.NO);
+        prefSideButton.setOnAction(actionEvent -> {
+            final Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Are you ok with this?", back, lay, none);
+            GUIUtils.centerButtons(alert.getDialogPane());
+            alert.setTitle("Confirmation Dialog");
+            alert.setHeaderText("You are setting preferredSide on runner: " + runnerName + " (marketId:" + marketId + " " + runnerId + ")");
+            alert.initModality(Modality.APPLICATION_MODAL);
+            alert.initOwner(mainStage);
+            final Optional<ButtonType> result = alert.showAndWait();
+            if (result.isPresent()) {
+                if (result.get() == back) {
+                    Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(RulesManagerModificationCommand.setRunnerPrefSide, marketId, runnerId, PrefSide.BACK));
+                } else if (result.get() == lay) {
+                    Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(RulesManagerModificationCommand.setRunnerPrefSide, marketId, runnerId, PrefSide.LAY));
+                } else if (result.get() == none) {
+                    Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(RulesManagerModificationCommand.setRunnerPrefSide, marketId, runnerId, PrefSide.NONE));
+                } else { // user closed the dialog
+                }
+            } else {
+                logger.error("result not present during runner prefSide alert for: {} {} {} {}", prefSide, marketId, runnerName, runnerId);
+            }
+            alert.close();
+        });
+        prefSideButton.setOnMousePressed(actionEvent -> {
+            final Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Are you ok with this?", back, lay, none);
+            GUIUtils.centerButtons(alert.getDialogPane());
+            alert.setTitle("Confirmation Dialog");
+            alert.setHeaderText("You are setting preferredSide on runner: " + runnerName + " (marketId:" + marketId + " " + runnerId + ")");
+            alert.initModality(Modality.APPLICATION_MODAL);
+            alert.initOwner(mainStage);
+            final Optional<ButtonType> result = alert.showAndWait();
+            if (result.isPresent()) {
+                if (result.get() == back) {
+                    Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(RulesManagerModificationCommand.setRunnerPrefSide, marketId, runnerId, PrefSide.BACK));
+                } else if (result.get() == lay) {
+                    Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(RulesManagerModificationCommand.setRunnerPrefSide, marketId, runnerId, PrefSide.LAY));
+                } else if (result.get() == none) {
+                    Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(RulesManagerModificationCommand.setRunnerPrefSide, marketId, runnerId, PrefSide.NONE));
+                } else { // user closed the dialog
+                }
+            } else {
+                logger.error("result not present during runner prefSide alert for: {} {} {} {}", prefSide, marketId, runnerName, runnerId);
+            }
+            alert.close();
+        });
 
         int currentLine = previousLinesRowIndex;
-        if (myUnmatchedBack == null) { // nothing to be done
-        } else {
-            for (final Map.Entry<Double, Double> entry : myUnmatchedBack.entrySet()) {
-//                mainGridPane.add(unmatchedBackPreLabel, 0, currentLine);
-                mainGridPane.add(new Label("back: " + decimalFormatLabelLow.format(entry.getKey())), 0, currentLine);
-                mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(entry.getValue())), 1, currentLine++);
+
+        for (final Map.Entry<Double, Double> entry : myUnmatchedBack.entrySet()) {
+            mainGridPane.add(new Label("back: " + decimalFormatLabelLow.format(entry.getKey())), 0, currentLine);
+            mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(entry.getValue())), 1, currentLine++);
+        }
+        for (final Map.Entry<Double, Double> entry : myUnmatchedLay.entrySet()) {
+            mainGridPane.add(new Label("lay:  " + decimalFormatLabelLow.format(entry.getKey())), 0, currentLine);
+            mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(entry.getValue())), 1, currentLine++);
+        }
+        for (@NotNull final TemporaryOrder temporaryOrder : myTempOrders) {
+            final TemporaryOrderType temporaryOrderType = temporaryOrder.getType();
+            if (temporaryOrderType == TemporaryOrderType.PLACE) {
+                mainGridPane.add(new Label("temp" + temporaryOrder.getSide() + ":  " + decimalFormatLabelLow.format(temporaryOrder.getPrice())), 0, currentLine);
+                mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(temporaryOrder.getSize())), 1, currentLine++);
+            } else {
+                mainGridPane.add(new Label("cancel" + temporaryOrder.getSide() + ":  " + decimalFormatLabelLow.format(temporaryOrder.getPrice())), 0, currentLine);
+                final Double sizeReduction = temporaryOrder.getSizeReduction();
+                mainGridPane.add(new Label("€" + (sizeReduction == null ? "max" : GUIUtils.decimalFormat(sizeReduction))), 1, currentLine++);
             }
         }
-        if (myUnmatchedLay == null) { // nothing to be done
-        } else {
-            for (final Map.Entry<Double, Double> entry : myUnmatchedLay.entrySet()) {
-//                mainGridPane.add(unmatchedLayPreLabel, 0, currentLine);
-                mainGridPane.add(new Label("lay:  " + decimalFormatLabelLow.format(entry.getKey())), 0, currentLine);
-                mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(entry.getValue())), 1, currentLine++);
-            }
-        }
+
         return currentLine;
+    }
+
+    static void pauseRefresh() {
+        refreshPaused.set(true);
+        mainGridPane.setStyle("-fx-background-color: brown;");
+    }
+
+    static void resumeRefresh() {
+        mainGridPane.setStyle("-fx-background-color: black;");
+        refreshPaused.set(false);
+        if (refreshQueued.getAndSet(false)) {
+            refreshDisplayedManagedObject();
+        } else { // no need to refresh
+        }
+    }
+
+    private static void focusGridNode(final TextField textField, final String id, final int columnIndex, final int rowIndex) { // field needs to be visibile for focus to work
+        if (textField == null) {
+            logger.error("null node in focusGridNode: {} {}", columnIndex, rowIndex);
+        } else if (focusPosition.positionEquals(id, columnIndex, rowIndex)) {
+            textField.requestFocus();
+            textField.positionCaret(focusPosition.getCaretPosition());
+//            focusPosition.reset();
+        }
+    }
+
+    private static void updateEventName(final TreeItem<String> currentEvent, final String eventId, @NotNull final ManagedEvent managedEvent) {
+        if (currentEvent == null) {
+            logger.error("null event in updateEventName");
+        } else {
+            final String existingName = currentEvent.getValue();
+            final String rawNewName = GUIUtils.getManagedEventName(managedEvent);
+            final String newName = GUIUtils.eventExistsInMapAndNotMarkedForRemoval(eventId) ? GUIUtils.markNameAsNotExpired(rawNewName) : GUIUtils.markNameAsExpired(rawNewName);
+
+            if (Objects.equals(existingName, newName)) { // no need for update
+            } else {
+                if (newName == null) {
+                    logger.error("null newName in updateEventName for: {} {}", existingName, currentEvent);
+                } else {
+                    currentEvent.setValue(newName);
+                    leftTreeView.refresh();
+                }
+            }
+        }
     }
 
     private static void updateMarketName(final TreeItem<String> currentMarket, final String marketId, @NotNull final ManagedMarket managedMarket) {
@@ -1762,9 +2064,8 @@ public class GUI
             logger.error("null market in updateMarketName");
         } else {
             final String existingName = currentMarket.getValue();
-            final boolean isExpired = existingName != null && GUIUtils.nameIsMarkedAsExpired(existingName);
             final String rawNewName = GUIUtils.getManagedMarketName(marketId, managedMarket);
-            final String newName = isExpired ? GUIUtils.markNameAsExpired(rawNewName) : rawNewName;
+            final String newName = GUIUtils.marketExistsInMapAndNotMarkedForRemoval(marketId) ? GUIUtils.markNameAsNotExpired(rawNewName) : GUIUtils.markNameAsExpired(rawNewName);
 
             if (Objects.equals(existingName, newName)) { // no need for update
             } else {
@@ -1781,152 +2082,139 @@ public class GUI
 
     @SuppressWarnings({"OverlyLongMethod", "ValueOfIncrementOrDecrementUsed"})
     private static void showManagedMarket(final String marketId, final TreeItem<String> currentMarket) {
-        currentlyShownManagedObject = currentMarket;
-        mainGridPane.getChildren().clear();
-        // marketName(ManagedMarket or newValue), eventName(parentEvent.value), getSimpleAmountLimit/getMaxMarketLimit(ManagedMarket), total value traded(Market), countDown until marketTime(MarketDefinition)
-        // "open for" timer, starting at "open date"(MarketDefinition)
-        // nTotalRunners(Market), nTotalActiveRunners(Market/MarketRunner/RunnerDefinition/RunnerStatus), nManagedRunners(ManagedMarket)
-        // runners(ManagedMarket+Market for non managed): runnerName(MarketCatalogue/RunnerCatalogue), BackAmountLimit(ManagedRunner), LayAmountLimit(ManagedRunner), MinBackOdds(ManagedRunner), MaxLayOdds(ManagedRunner)
-        // calculated from OrderMarketRunner for all runners, but should be 0 for non managed ones: matchedBackExposure, matchedLayExposure, totalBackExposure, totalLayExposure
-        // total value traded(MarketRunner), last trade price(MarketRunner)
-        // for all runners, taken from MarketRunner for general unmatched amounts and from OrderMarketRunner/Order for my unmatched amounts: list of 10 values on each side with price/size
-        // (MarketRunner): list of 10 values on each side with price/size for traded amounts --> maybe not, occupies too much space and is not a priority, can be added later
-        final ManagedMarket managedMarket = Statics.rulesManager.markets.get(marketId);
-        if (managedMarket == null) {
-            logger.error("null managedMarket in left listener for: {} {}", currentMarket, marketId);
+        if (refreshPaused.get()) { // refresh is paused, refresh will happen when pause ends
+            refreshQueued.set(true);
         } else {
-            final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
-            final Market cachedMarket = Statics.marketCache.getMarket(marketId);
-            final MarketDefinition marketDefinition = cachedMarket == null ? null : cachedMarket.getMarketDefinition();
-            updateMarketName(currentMarket, marketId, managedMarket);
-            final String marketName = currentMarket.getValue();
-            final TreeItem<String> parentItem = currentMarket.getParent();
-            final String eventName = parentItem == null ? null : parentItem.getValue();
-            final double simpleAmountLimit = managedMarket.getSimpleAmountLimit();
-            final double maxMarketLimit = managedMarket.getMaxMarketLimit(Statics.existingFunds);
-            final double calculatedAmountLimit = managedMarket.simpleGetCalculatedLimit();
-            final double marketTotalValueTraded = cachedMarket == null ? -1d : cachedMarket.getTvEUR(Statics.existingFunds.currencyRate);
-            final Date marketLiveTime = marketDefinition == null ? null : marketDefinition.getMarketTime();
-            final Date marketOpenTime = marketDefinition == null ? null : marketDefinition.getOpenDate();
-            final int nTotalRunners = cachedMarket == null ? -1 : cachedMarket.getNRunners();
-            final int nActiveRunners = cachedMarket == null ? -1 : cachedMarket.getNActiveRunners();
-            final int nManagedRunners = managedMarket.getNRunners();
-            final boolean isEnabled = managedMarket.isEnabledMarket();
-
-            final Label eventNameLabel = new Label(eventName);
-            final Label marketNameLabel = new Label(marketName);
-            final Hyperlink marketIdLink = new Hyperlink(marketId);
-            final String webLink = "https://www.betfair.ro/exchange/plus/market/" + marketId;
-            final EventHandler<ActionEvent> linkEvent = event -> getInstance().getHostServices().showDocument(webLink);
-            marketIdLink.setOnAction(linkEvent);
-            final TextField simpleAmountLimitNode = new TextField(decimalFormatTextField.format(Generic.keepDoubleWithinRange(simpleAmountLimit)));
-            final Label maxMarketLimitLabel = new Label("€ " + decimalFormatLabelLow.format(maxMarketLimit));
-            final Label calculatedAmountLimitLabel = new Label("€ " + decimalFormatLabelLow.format(calculatedAmountLimit));
-            final Label marketTotalValueTradedLabel = new Label("€ " + decimalFormatLabelLow.format(marketTotalValueTraded));
-
-            if (marketLiveTime == null) {
-                marketLiveCounterLabel.setText("null");
-                timeline.stop();
+            currentlyShownManagedObject = currentMarket;
+            mainGridPane.getChildren().clear();
+            // marketName(ManagedMarket or newValue), eventName(parentEvent.value), getSimpleAmountLimit/getMaxMarketLimit(ManagedMarket), total value traded(Market), countDown until marketTime(MarketDefinition)
+            // "open for" timer, starting at "open date"(MarketDefinition)
+            // nTotalRunners(Market), nTotalActiveRunners(Market/MarketRunner/RunnerDefinition/RunnerStatus), nManagedRunners(ManagedMarket)
+            // runners(ManagedMarket+Market for non managed): runnerName(MarketCatalogue/RunnerCatalogue), BackAmountLimit(ManagedRunner), LayAmountLimit(ManagedRunner), MinBackOdds(ManagedRunner), MaxLayOdds(ManagedRunner)
+            // calculated from OrderMarketRunner for all runners, but should be 0 for non managed ones: matchedBackExposure, matchedLayExposure, totalBackExposure, totalLayExposure
+            // total value traded(MarketRunner), last trade price(MarketRunner)
+            // for all runners, taken from MarketRunner for general unmatched amounts and from OrderMarketRunner/Order for my unmatched amounts: list of 10 values on each side with price/size
+            // (MarketRunner): list of 10 values on each side with price/size for traded amounts --> maybe not, occupies too much space and is not a priority, can be added later
+            final ManagedMarket managedMarket = Statics.rulesManager.markets.get(marketId);
+            if (managedMarket == null) {
+                logger.error("null managedMarket in left listener for: {} {}", currentMarket, marketId);
             } else {
-                liveTime.set(marketLiveTime.getTime());
-                liveCounterEventHandler.handle(null);
-                timeline.play();
-            }
+                final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
+                final Market cachedMarket = SharedStatics.marketCache.getMarket(marketId);
+                final MarketDefinition marketDefinition = cachedMarket == null ? null : cachedMarket.getMarketDefinition();
+                updateMarketName(currentMarket, marketId, managedMarket);
+                final String marketName = currentMarket.getValue();
+                final TreeItem<String> parentItem = currentMarket.getParent();
+                final String eventName = parentItem == null ? null : parentItem.getValue();
+                final double simpleAmountLimit = managedMarket.getSimpleAmountLimit();
+                final double maxMarketLimit = managedMarket.getMaxMarketLimit(Statics.existingFunds);
+                final double calculatedAmountLimit = managedMarket.simpleGetCalculatedLimit();
+                final double marketTotalValueTraded = cachedMarket == null ? -1d : cachedMarket.getTvEUR(Statics.existingFunds.currencyRate);
+                final Date marketLiveTime = marketDefinition == null ? null : marketDefinition.getMarketTime();
+                final Date marketOpenTime = marketDefinition == null ? null : marketDefinition.getOpenDate();
+                final int nTotalRunners = cachedMarket == null ? -1 : cachedMarket.getNRunners();
+                final int nActiveRunners = cachedMarket == null ? -1 : cachedMarket.getNActiveRunners();
+                final int nManagedRunners = managedMarket.getNRunners();
+                final boolean isEnabled = managedMarket.isEnabledMarket();
+                final boolean mandatoryPlace = managedMarket.isMandatoryPlace();
+                final boolean keepAtInPlay = managedMarket.isKeepAtInPlay();
 
-            final Label marketLiveTimeLabel = new Label(marketLiveTime == null ? null : marketLiveTime.toString());
-            final Label marketOpenTimeLabel = new Label(marketOpenTime == null ? null : marketOpenTime.toString());
-            final Label nTotalRunnersLabel = new Label(String.valueOf(nTotalRunners));
-            final Label nActiveRunnersLabel = new Label(String.valueOf(nActiveRunners));
-            final Label nManagedRunnersLabel = new Label(String.valueOf(nManagedRunners));
-            @Nullable final Button isNotEnabledButton;
-            if (isEnabled) {
-                isNotEnabledButton = null;
-            } else {
-                isNotEnabledButton = new Button("Enable");
-                isNotEnabledButton.setOnAction(actionEvent -> {
-                    final Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-                    alert.setTitle("Confirmation Dialog");
-                    alert.setHeaderText("You are enabling market: " + marketName + " (id:" + marketId + ")");
-                    alert.setContentText("Are you ok with this?");
-                    alert.initModality(Modality.APPLICATION_MODAL);
-                    alert.initOwner(mainStage);
-                    final Optional<ButtonType> result = alert.showAndWait();
-                    if (result.isPresent()) {
-                        if (result.get() == ButtonType.OK) {
-                            Statics.sslClientThread.sendQueue.add(new SerializableObjectModification<>(RulesManagerModificationCommand.setMarketEnabled, marketId, true));
-                        } else { // user chose CANCEL or closed the dialog
-                        }
-                    } else {
-                        logger.error("result not present during market enable alert for: {} {} {}", marketId, marketName, eventName);
-                    }
-                    alert.close();
-                });
-            }
+                final Label eventNameLabel = new Label(eventName);
+                final Label marketNameLabel = new Label(marketName);
+                final Hyperlink marketIdLink = new Hyperlink(marketId);
+                final String webLink = "https://www.betfair.ro/exchange/plus/market/" + marketId;
+                final EventHandler<ActionEvent> linkEvent = event -> getInstance().getHostServices().showDocument(webLink);
+                marketIdLink.setOnAction(linkEvent);
+                final TextField simpleAmountLimitNode = new TextField(decimalFormatTextField.format(Generic.keepDoubleWithinRange(simpleAmountLimit)));
+                final Label maxMarketLimitLabel = new Label("€ " + decimalFormatLabelLow.format(maxMarketLimit));
+                final Label calculatedAmountLimitLabel = new Label("€ " + decimalFormatLabelLow.format(calculatedAmountLimit));
+                final Label marketTotalValueTradedLabel = new Label("€ " + decimalFormatLabelLow.format(marketTotalValueTraded));
 
-            GUIUtils.setOnKeyPressedTextField(simpleAmountLimitNode, simpleAmountLimit, RulesManagerModificationCommand.setMarketAmountLimit, marketId);
-            GUIUtils.handleDoubleTextField(simpleAmountLimitNode, simpleAmountLimit);
-
-            int rowIndex = 0;
-            mainGridPane.add(eventNamePreLabel, 0, rowIndex);
-            mainGridPane.add(eventNameLabel, 1, rowIndex++);
-            mainGridPane.add(marketNamePreLabel, 0, rowIndex);
-            mainGridPane.add(marketNameLabel, 1, rowIndex++);
-            mainGridPane.add(marketIdPreLabel, 0, rowIndex);
-            mainGridPane.add(marketIdLink, 1, rowIndex++);
-            mainGridPane.add(simpleAmountLimitLabel, 0, rowIndex);
-            mainGridPane.add(simpleAmountLimitNode, 1, rowIndex++);
-            mainGridPane.add(calculatedAmountLimitPreLabel, 0, rowIndex);
-            mainGridPane.add(calculatedAmountLimitLabel, 1, rowIndex++);
-            mainGridPane.add(maxMarketLimitPreLabel, 0, rowIndex);
-            mainGridPane.add(maxMarketLimitLabel, 1, rowIndex++);
-            mainGridPane.add(marketTotalValueTradedPreLabel, 0, rowIndex);
-            mainGridPane.add(marketTotalValueTradedLabel, 1, rowIndex++);
-            mainGridPane.add(marketLiveCounterPreLabel, 0, rowIndex);
-            mainGridPane.add(marketLiveCounterLabel, 1, rowIndex++);
-            mainGridPane.add(marketLiveTimePreLabel, 0, rowIndex);
-            mainGridPane.add(marketLiveTimeLabel, 1, rowIndex++);
-            mainGridPane.add(marketOpenTimePreLabel, 0, rowIndex);
-            mainGridPane.add(marketOpenTimeLabel, 1, rowIndex++);
-            mainGridPane.add(nTotalRunnersPreLabel, 0, rowIndex);
-            mainGridPane.add(nTotalRunnersLabel, 1, rowIndex++);
-            mainGridPane.add(nActiveRunnersPreLabel, 0, rowIndex);
-            mainGridPane.add(nActiveRunnersLabel, 1, rowIndex++);
-            mainGridPane.add(nManagedRunnersPreLabel, 0, rowIndex);
-            mainGridPane.add(nManagedRunnersLabel, 1, rowIndex++);
-            if (!isEnabled) {
-                mainGridPane.add(isNotEnabledPreLabel, 0, rowIndex);
-                mainGridPane.add(isNotEnabledButton, 1, rowIndex++);
-            }
-
-            int runnerIndex = 0;
-            @NotNull final LinkedHashMap<RunnerId, ManagedRunner> managedRunners =
-                    managedMarket.getRunners(Statics.marketCache.markets, Statics.rulesManager.listOfQueues, Statics.rulesManager.marketsToCheck, Statics.rulesManager.events, Statics.rulesManager.markets, Statics.rulesManager.rulesHaveChanged,
-                                             Statics.marketCataloguesMap, Statics.PROGRAM_START_TIME);
-            final HashMap<RunnerId, MarketRunner> allRunners = cachedMarket == null ? null : cachedMarket.getMarketRunners();
-            for (@NotNull final Map.Entry<RunnerId, ManagedRunner> entry : managedRunners.entrySet()) {
-                final RunnerId runnerId = entry.getKey();
-                final ManagedRunner managedRunner = entry.getValue();
-                final MarketRunner marketRunner = allRunners == null ? null : allRunners.get(runnerId);
-                rowIndex = showRunner(marketId, runnerId, managedRunner, marketRunner, marketCatalogue, cachedMarket, rowIndex, runnerIndex++);
-            }
-            if (allRunners == null) { // no marketRunners list present, nothing to be done
-            } else {
-                for (@NotNull final Map.Entry<RunnerId, MarketRunner> entry : allRunners.entrySet()) {
-                    final RunnerId runnerId = entry.getKey();
-                    if (managedRunners.containsKey(runnerId)) { // I already parsed this in the previous for loop, nothing to be done here
-                    } else { // non managed runner
-                        final MarketRunner marketRunner = entry.getValue();
-                        rowIndex = showRunner(marketId, runnerId, null, marketRunner, marketCatalogue, cachedMarket, rowIndex, runnerIndex++);
-                    }
-                } // end for
-            }
-
-            if (focusedColumnIndex.get() >= 0 && focusedRowIndex.get() >= 0) {
-                final Node focusedNode = GUIUtils.getNodeByRowColumnIndex(mainGridPane, focusedColumnIndex.getAndSet(-1), focusedRowIndex.getAndSet(-1));
-                if (focusedNode == null) { // nothing was focused, nothing to be done
+                if (marketLiveTime == null) {
+                    marketLiveCounterLabel.setText("null");
+                    timeline.stop();
                 } else {
-                    focusedNode.requestFocus();
+                    liveTime.set(marketLiveTime.getTime());
+                    liveCounterEventHandler.handle(null);
+                    timeline.play();
                 }
+
+                final Label marketLiveTimeLabel = new Label(marketLiveTime == null ? null : marketLiveTime.toString());
+                final Label marketOpenTimeLabel = new Label(marketOpenTime == null ? null : marketOpenTime.toString());
+                final Label nTotalRunnersLabel = new Label(String.valueOf(nTotalRunners));
+                final Label nActiveRunnersLabel = new Label(String.valueOf(nActiveRunners));
+                final Label nManagedRunnersLabel = new Label(String.valueOf(nManagedRunners));
+
+                @NotNull final CheckBox isEnabledCheckBox = GUIUtils.standardCheckBoxFactory(mainStage, marketIsEnabledLabel, eventName, marketId, marketName, isEnabled, RulesManagerModificationCommand.setMarketEnabled, "");
+                isEnabledCheckBox.setStyle("box-color: red;"); // color for unselected checkBox
+                GUIUtils.standardCheckBoxFactory(mainStage, marketMandatoryPlaceLabel, eventName, marketId, marketName, mandatoryPlace, RulesManagerModificationCommand.setMarketMandatoryPlace, "mandatoryPlace");
+                GUIUtils.standardCheckBoxFactory(mainStage, marketKeepAtInPlayLabel, eventName, marketId, marketName, keepAtInPlay, RulesManagerModificationCommand.setMarketKeepAtInPlay, "keepAtInPlay");
+
+                GUIUtils.setOnKeyPressedTextField(marketId, simpleAmountLimitNode, simpleAmountLimit, RulesManagerModificationCommand.setMarketAmountLimit, marketId);
+                GUIUtils.handleDoubleTextField(simpleAmountLimitNode, simpleAmountLimit);
+
+                int rowIndex = 0;
+                mainGridPane.add(eventNamePreLabel, 0, rowIndex);
+                mainGridPane.add(eventNameLabel, 1, rowIndex++);
+                mainGridPane.add(marketNamePreLabel, 0, rowIndex);
+                mainGridPane.add(marketNameLabel, 1, rowIndex++);
+                mainGridPane.add(marketIdPreLabel, 0, rowIndex);
+                mainGridPane.add(marketIdLink, 1, rowIndex++);
+                mainGridPane.add(simpleAmountLimitLabel, 0, rowIndex);
+                mainGridPane.add(simpleAmountLimitNode, 1, rowIndex++);
+                focusGridNode(simpleAmountLimitNode, marketId, 1, rowIndex - 1);
+
+                mainGridPane.add(calculatedAmountLimitPreLabel, 0, rowIndex);
+                mainGridPane.add(calculatedAmountLimitLabel, 1, rowIndex++);
+                mainGridPane.add(maxMarketLimitPreLabel, 0, rowIndex);
+                mainGridPane.add(maxMarketLimitLabel, 1, rowIndex++);
+                mainGridPane.add(marketTotalValueTradedPreLabel, 0, rowIndex);
+                mainGridPane.add(marketTotalValueTradedLabel, 1, rowIndex++);
+                mainGridPane.add(marketLiveCounterPreLabel, 0, rowIndex);
+                mainGridPane.add(marketLiveCounterLabel, 1, rowIndex++);
+                mainGridPane.add(marketLiveTimePreLabel, 0, rowIndex);
+                mainGridPane.add(marketLiveTimeLabel, 1, rowIndex++);
+                mainGridPane.add(marketOpenTimePreLabel, 0, rowIndex);
+                mainGridPane.add(marketOpenTimeLabel, 1, rowIndex++);
+                mainGridPane.add(nTotalRunnersPreLabel, 0, rowIndex);
+                mainGridPane.add(nTotalRunnersLabel, 1, rowIndex++);
+                mainGridPane.add(nActiveRunnersPreLabel, 0, rowIndex);
+                mainGridPane.add(nActiveRunnersLabel, 1, rowIndex++);
+                mainGridPane.add(nManagedRunnersPreLabel, 0, rowIndex);
+                mainGridPane.add(nManagedRunnersLabel, 1, rowIndex++);
+                mainGridPane.add(marketMandatoryPlaceLabel, 0, rowIndex++);
+                mainGridPane.add(marketKeepAtInPlayLabel, 0, rowIndex++);
+                mainGridPane.add(marketIsEnabledLabel, 0, rowIndex++);
+
+                int runnerIndex = 0;
+                @NotNull final LinkedHashMap<RunnerId, ManagedRunner> managedRunners =
+                        managedMarket.getRunners(Statics.rulesManager, Statics.marketCataloguesMap);
+                final HashMap<RunnerId, MarketRunner> allRunners = cachedMarket == null ? null : cachedMarket.getMarketRunners();
+                for (@NotNull final Map.Entry<RunnerId, ManagedRunner> entry : managedRunners.entrySet()) {
+                    final RunnerId runnerId = entry.getKey();
+                    final ManagedRunner managedRunner = entry.getValue();
+                    final MarketRunner marketRunner = allRunners == null ? null : allRunners.get(runnerId);
+                    rowIndex = showRunner(marketId, runnerId, managedRunner, marketRunner, marketCatalogue, cachedMarket, rowIndex, runnerIndex++);
+                }
+                if (allRunners == null) { // no marketRunners list present, nothing to be done
+                } else {
+                    for (@NotNull final Map.Entry<RunnerId, MarketRunner> entry : allRunners.entrySet()) {
+                        final RunnerId runnerId = entry.getKey();
+                        if (managedRunners.containsKey(runnerId)) { // I already parsed this in the previous for loop, nothing to be done here
+                        } else { // non managed runner
+                            final MarketRunner marketRunner = entry.getValue();
+                            rowIndex = showRunner(marketId, runnerId, null, marketRunner, marketCatalogue, cachedMarket, rowIndex, runnerIndex++);
+                        }
+                    } // end for
+                }
+
+//            if (focusedColumnIndex.get() >= 0 && focusedRowIndex.get() >= 0) {
+//                final Node focusedNode = GUIUtils.getNodeByRowColumnIndex(mainGridPane, focusedColumnIndex.getAndSet(-1), focusedRowIndex.getAndSet(-1));
+//                if (focusedNode == null) { // nothing was focused, nothing to be done
+//                } else {
+//                    focusedNode.requestFocus();
+//                }
+//            }
             }
         }
     }
@@ -1976,7 +2264,6 @@ public class GUI
         final Pane hugeSpacer = new Pane();
         HBox.setHgrow(hugeSpacer, Priority.ALWAYS);
 
-        final Button refreshEventsButton = new Button("_Refresh events");
         refreshEventsButton.setMnemonicParsing(true);
         refreshEventsButton.setOnAction(event -> {
             refreshEventsButton.setDisable(true);
@@ -1984,7 +2271,7 @@ public class GUI
 
             @SuppressWarnings("AnonymousInnerClassMayBeStatic") final TimerTask task = new TimerTask() {
                 public void run() {
-                    Platform.runLater(() -> refreshEventsButton.setDisable(false));
+                    addCommand(PlatformRunLaterEnum.refreshEventsButtonSetDisable);
                 }
             };
             Statics.timer.schedule(task, 5_000L);
@@ -2001,6 +2288,7 @@ public class GUI
             if (rightPanelVisible) {
                 //noinspection AssignmentToStaticFieldFromInstanceMethod
                 GUI.rightPanelVisible = false;
+                processMarketsForRemoval();
                 processEventsForRemoval();
 
                 mainSplitPaneNodesList.remove(rightVBox);
@@ -2013,12 +2301,13 @@ public class GUI
                 refreshEventsButton.fire();
 
                 mainSplitPaneNodesList.add(rightVBox);
+                filterTextField.requestFocus();
+                filterTextField.end();
+
 //                mainSplitPane.setDividerPositions(.09, .91);
 //                mainSplitPane.setDividerPosition(1, .91d);
                 topBarNodesList.add(topBarNodesList.size() - 1, refreshEventsButton);
                 rightPaneButton.setText("Hide _events");
-                filterTextField.requestFocus();
-                filterTextField.end();
 
                 initializeRightTreeView();
             }
@@ -2092,28 +2381,33 @@ public class GUI
 //                        filterTextField.fireEvent(pressBackSpace);
 //                    }
 
-                    filterTextField.clear();
-                    GUIUtils.setFilterPredicate(filterTextField, rightEventTreeRoot);
-
-                    @Nullable final TreeItem<String> selectedItem;
-                    if (eventId == null) {
-                        if (marketId == null) {
-                            selectedItem = null; // error message was printed previously
-                        } else {
-                            selectedItem = marketsTreeItemMap.get(marketId);
-                        }
-                    } else {
-                        selectedItem = eventsTreeItemMap.get(eventId);
+                    final String oldMarketId = marketsTreeItemMap.getKey(oldValue);
+                    if (oldMarketId == null) {
+                        filterTextField.clear();
+                        GUIUtils.setFilterPredicate(filterTextField, rightEventTreeRoot);
+                    } else { // was market, I won't reset filter
                     }
 
-                    final SelectionModel<TreeItem<String>> selectionModel = rightTreeView.getSelectionModel();
-                    selectionModel.select(selectedItem);
-                    rightTreeView.scrollTo(selectionModel.getSelectedIndex());
+//                    @Nullable final TreeItem<String> selectedItem;
+                    if (eventId == null) {
+                        if (marketId == null) {
+//                            selectedItem = null; // error message was printed previously
+                        } else {
+//                            selectedItem = marketsTreeItemMap.get(marketId);
+                        }
+                    } else {
+//                        selectedItem = eventsTreeItemMap.get(eventId);
+
+                        final SelectionModel<TreeItem<String>> selectionModel = rightTreeView.getSelectionModel();
+                        selectionModel.select(eventsTreeItemMap.get(eventId));
+                        rightTreeView.scrollTo(selectionModel.getSelectedIndex());
+                    }
                 }
             }
         });
 
-        final MenuItem entryRight1 = new MenuItem("Add Managed Object");
+        final MenuItem entryRight1 = new MenuItem("_Add Managed Object");
+        entryRight1.setMnemonicParsing(true);
         entryRight1.setOnAction(ae -> {
             @NotNull final TreeItem<String> treeItem = rightTreeView.getSelectionModel().getSelectedItem();
             final String marketId = marketsTreeItemMap.getKey(treeItem);
@@ -2126,7 +2420,7 @@ public class GUI
                         logger.error("null marketId and eventId in entryRight for: {} {} {}", Objects.equals(parentNode, rightEventTreeRoot), treeItem, parentNode);
                     }
                 } else {
-                    Statics.threadPoolExecutor.submit(() -> Utils.createManagedEvent(eventId));
+                    SharedStatics.threadPoolExecutor.submit(() -> Utils.createManagedEvent(eventId));
                 }
             } else {
                 @Nullable final String eventId;
@@ -2136,10 +2430,11 @@ public class GUI
                 } else {
                     eventId = eventsTreeItemMap.getKey(parentNode);
                 }
-                Statics.threadPoolExecutor.submit(() -> Utils.createManagedMarket(marketId, eventId));
+                SharedStatics.threadPoolExecutor.submit(() -> Utils.createManagedMarket(marketId, eventId));
             }
         });
-        final MenuItem entryRight2 = new MenuItem("Object in Browser");
+        final MenuItem entryRight2 = new MenuItem("Object in _Browser");
+        entryRight2.setMnemonicParsing(true);
         entryRight2.setOnAction(ae -> {
             @NotNull final TreeItem<String> treeItem = rightTreeView.getSelectionModel().getSelectedItem();
             final String marketId = marketsTreeItemMap.getKey(treeItem);
@@ -2149,7 +2444,7 @@ public class GUI
                 if (eventId == null) {
                     if (Objects.equals(treeItem.getValue(), DEFAULT_EVENT_NAME)) { // I have clicked the default event, normal behavior, nothing to be done
                     } else {
-                        logger.error("null marketId and eventId in entryRight for: {} {} {}", Objects.equals(parentNode, rightEventTreeRoot), treeItem, parentNode);
+                        logger.error("null marketId and eventId in entryRight2 for: {} {} {}", Objects.equals(parentNode, rightEventTreeRoot), treeItem, parentNode);
                     }
                 } else {
                     final String webLink = "https://www.betfair.ro/exchange/plus/football/event/" + eventId;
@@ -2158,7 +2453,7 @@ public class GUI
             } else {
 //                @Nullable final String eventId;
                 if (parentNode == null) {
-                    logger.error("null parentNode in entryRight for marketId {} treeItem: {}", marketId, treeItem);
+                    logger.error("null parentNode in entryRight2 for marketId {} treeItem: {}", marketId, treeItem);
 //                    eventId = null;
                 } else { // no error
 //                    eventId = eventsTreeItemMap.getKey(parentNode);
@@ -2171,20 +2466,21 @@ public class GUI
         rightContextMenu.setOnShowing(ae -> {
             @NotNull final TreeItem<String> treeItem = rightTreeView.getSelectionModel().getSelectedItem();
             if (marketsTreeItemMap.containsValue(treeItem)) {
-                entryRight1.setText("Add Managed Market");
-                entryRight2.setText("Market in Browser");
+                entryRight1.setText("_Add Managed Market");
+                entryRight2.setText("Market in _Browser");
             } else if (eventsTreeItemMap.containsValue(treeItem)) {
-                entryRight1.setText("Add Managed Event");
-                entryRight2.setText("Event in Browser");
+                entryRight1.setText("_Add Managed Event");
+                entryRight2.setText("Event in _Browser");
             } else {
                 logger.error("treeItem not contained in markets nor events maps in rightContextMenu: {} {}", treeItem, treeItem == null ? null : treeItem.getParent());
-                entryRight1.setText("Add Managed Object");
-                entryRight2.setText("Object in Browser");
+                entryRight1.setText("_Add Managed Object");
+                entryRight2.setText("Object in _Browser");
             }
         });
         rightTreeView.setContextMenu(rightContextMenu);
 
-        final MenuItem entryLeft1 = new MenuItem("Remove Managed Object");
+        final MenuItem entryLeft1 = new MenuItem("_Remove Managed Object");
+        entryLeft1.setMnemonicParsing(true);
         entryLeft1.setOnAction(ae -> {
             @NotNull final TreeItem<String> treeItem = leftTreeView.getSelectionModel().getSelectedItem();
             final String marketId = managedMarketsTreeItemMap.getKey(treeItem);
@@ -2197,22 +2493,51 @@ public class GUI
                         logger.error("null marketId and eventId in entryLeft for: {} {} {}", Objects.equals(parentNode, leftEventTreeRoot), treeItem, parentNode);
                     }
                 } else {
-                    Statics.threadPoolExecutor.submit(() -> Utils.removeManagedEvent(eventId));
+                    SharedStatics.threadPoolExecutor.submit(() -> Utils.removeManagedEvent(eventId));
                 }
             } else {
-                Statics.threadPoolExecutor.submit(() -> Utils.removeManagedMarket(marketId));
+                SharedStatics.threadPoolExecutor.submit(() -> Utils.removeManagedMarket(marketId));
             }
         });
-        final ContextMenu leftContextMenu = new ContextMenu(entryLeft1);
+        final MenuItem entryLeft2 = new MenuItem("Object in _Browser");
+        entryLeft2.setMnemonicParsing(true);
+        entryLeft2.setOnAction(ae -> {
+            @NotNull final TreeItem<String> treeItem = leftTreeView.getSelectionModel().getSelectedItem();
+            final String marketId = managedMarketsTreeItemMap.getKey(treeItem);
+            final TreeItem<String> parentNode = treeItem.getParent();
+            if (marketId == null) {
+                final String eventId = managedEventsTreeItemMap.getKey(treeItem);
+                if (eventId == null) {
+                    if (Objects.equals(treeItem.getValue(), DEFAULT_EVENT_NAME)) { // I have clicked the default event, normal behavior, nothing to be done
+                    } else {
+                        logger.error("null marketId and eventId in entryLeft2 for: {} {} {}", Objects.equals(parentNode, leftEventTreeRoot), treeItem, parentNode);
+                    }
+                } else {
+                    final String webLink = "https://www.betfair.ro/exchange/plus/football/event/" + eventId;
+                    getInstance().getHostServices().showDocument(webLink);
+                }
+            } else {
+                if (parentNode == null) {
+                    logger.error("null parentNode in entryLeft2 for marketId {} treeItem: {}", marketId, treeItem);
+                } else { // no error
+                }
+                final String webLink = "https://www.betfair.ro/exchange/plus/market/" + marketId;
+                getInstance().getHostServices().showDocument(webLink);
+            }
+        });
+        final ContextMenu leftContextMenu = new ContextMenu(entryLeft1, entryLeft2);
         leftContextMenu.setOnShowing(ae -> {
             @NotNull final TreeItem<String> treeItem = leftTreeView.getSelectionModel().getSelectedItem();
             if (managedMarketsTreeItemMap.containsValue(treeItem)) {
-                entryLeft1.setText("Remove Managed Market");
+                entryLeft1.setText("_Remove Managed Market");
+                entryLeft2.setText("Market in _Browser");
             } else if (managedEventsTreeItemMap.containsValue(treeItem)) {
-                entryLeft1.setText("Remove Managed Event");
+                entryLeft1.setText("_Remove Managed Event");
+                entryLeft2.setText("Event in _Browser");
             } else {
                 logger.error("treeItem not contained in markets nor events maps in leftContextMenu: {} {}", treeItem, treeItem == null ? null : treeItem.getParent());
-                entryLeft1.setText("Remove Managed Object");
+                entryLeft1.setText("_Remove Managed Object");
+                entryLeft2.setText("Object in _Browser");
             }
         });
         leftTreeView.setContextMenu(leftContextMenu);
@@ -2269,6 +2594,7 @@ public class GUI
 //            }
 //        });
 
+        rootVBox.requestFocus(); // removes focus from some element that was unwantedly focused by default
         primaryStage.show();
 //        mainSplitPane.setDividerPositions(.09, .91);
 //        mainSplitPane.setDividerPosition(0, .09d);

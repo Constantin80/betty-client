@@ -4,6 +4,7 @@ import info.fmro.client.objects.Statics;
 import info.fmro.client.threads.MaintenanceThread;
 import info.fmro.client.threads.TimeJumpDetectorThread;
 import info.fmro.shared.enums.ProgramName;
+import info.fmro.shared.objects.SharedStatics;
 import info.fmro.shared.utility.CustomUncaughtExceptionHandler;
 import info.fmro.shared.utility.Generic;
 import javafx.application.Application;
@@ -28,7 +29,7 @@ final class Client {
 
     @SuppressWarnings({"MethodWithMultipleReturnPoints", "OverlyLongMethod"})
     public static void main(final String[] args) {
-        Generic.programName.set(ProgramName.CLIENT);
+        SharedStatics.programName.set(ProgramName.CLIENT);
         Statics.standardStreamsList = Generic.replaceStandardStreams(Statics.STDOUT_FILE_NAME, Statics.STDERR_FILE_NAME, Statics.LOGS_FOLDER_NAME, !Statics.closeStandardStreamsNotInitialized);
 
         FileOutputStream outFileOutputStream = null, errFileOutputStream = null;
@@ -72,7 +73,7 @@ final class Client {
             timeJumpDetectorThread.start();
             Statics.sslClientThread.start();
 
-            while (!Statics.mustStop.get()) {
+            while (!SharedStatics.mustStop.get()) {
                 //noinspection NestedTryStatement
                 try {
 
@@ -98,12 +99,20 @@ final class Client {
             }
 
             Statics.timer.cancel();
-            Statics.threadPoolExecutor.shutdown();
+            SharedStatics.threadPoolExecutor.shutdown();
+            SharedStatics.threadPoolExecutorImportant.shutdown();
             Statics.scheduledThreadPoolExecutor.shutdown();
 
-            if (!Statics.threadPoolExecutor.awaitTermination(10L, TimeUnit.MINUTES)) {
-                logger.error("threadPoolExecutor hanged: {}", Statics.threadPoolExecutor.getActiveCount());
-                final List<Runnable> runnableList = Statics.threadPoolExecutor.shutdownNow();
+            if (!SharedStatics.threadPoolExecutor.awaitTermination(10L, TimeUnit.MINUTES)) {
+                logger.error("threadPoolExecutor hanged: {}", SharedStatics.threadPoolExecutor.getActiveCount());
+                final List<Runnable> runnableList = SharedStatics.threadPoolExecutor.shutdownNow();
+                if (!runnableList.isEmpty()) {
+                    logger.error("threadPoolExecutor not commenced: {}", runnableList.size());
+                }
+            }
+            if (!SharedStatics.threadPoolExecutorImportant.awaitTermination(10L, TimeUnit.MINUTES)) {
+                logger.error("threadPoolExecutor hanged: {}", SharedStatics.threadPoolExecutorImportant.getActiveCount());
+                final List<Runnable> runnableList = SharedStatics.threadPoolExecutorImportant.shutdownNow();
                 if (!runnableList.isEmpty()) {
                     logger.error("threadPoolExecutor not commenced: {}", runnableList.size());
                 }
@@ -124,7 +133,7 @@ final class Client {
 
             VarsIO.writeObjectsToFiles();
             Platform.exit();
-            Generic.alreadyPrintedMap.clear(); // also prints the important properties
+            SharedStatics.alreadyPrintedMap.clear(); // also prints the important properties
         } catch (NumberFormatException | InterruptedException exception) {
             logger.error("STRANGE ERROR inside Client", exception);
         } catch (Throwable throwable) { // attempts to catch fatal errors
