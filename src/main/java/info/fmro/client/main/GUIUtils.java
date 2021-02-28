@@ -8,7 +8,10 @@ import info.fmro.shared.entities.MarketDescription;
 import info.fmro.shared.enums.RulesManagerModificationCommand;
 import info.fmro.shared.logic.ManagedEvent;
 import info.fmro.shared.logic.ManagedMarket;
+import info.fmro.shared.logic.ManagedRunner;
+import info.fmro.shared.objects.SharedStatics;
 import info.fmro.shared.stream.cache.market.Market;
+import info.fmro.shared.stream.cache.order.OrderMarket;
 import info.fmro.shared.stream.definitions.MarketDefinition;
 import info.fmro.shared.stream.enums.Side;
 import info.fmro.shared.stream.objects.RunnerId;
@@ -45,9 +48,12 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
@@ -398,6 +404,109 @@ final class GUIUtils {
                 }
             }
         });
+    }
+
+    static StringBuilder getCloseWindowContentText() {
+        final StringBuilder contentText = new StringBuilder(0);
+        final Set<String> managedMarketIds = Statics.rulesManager.getManagedMarketIds();
+        final HashMap<String, OrderMarket> orderMarketsWithoutManagedMarket = SharedStatics.orderCache.markets.copy();
+        orderMarketsWithoutManagedMarket.keySet().removeAll(managedMarketIds);
+        if (orderMarketsWithoutManagedMarket.isEmpty()) { // no error, nothing to be done
+        } else {
+            final int size = orderMarketsWithoutManagedMarket.size();
+            logger.error("{} orderMarketsWithoutManagedMarket: {}", size, Generic.objectToString(orderMarketsWithoutManagedMarket));
+            contentText.append("ERROR: ").append(size).append(" orderMarketsWithoutManagedMarket present\n\n");
+        }
+        final HashMap<String, ManagedMarket> managedMarkets = Statics.rulesManager.markets.copy();
+        for (final ManagedMarket managedMarket : managedMarkets.values()) {
+            if (managedMarket == null) { // error message is printed further down
+            } else {
+                managedMarket.calculateExposure(Statics.rulesManager, true);
+            }
+        }
+        final StringBuilder managedEventsOverLimit = new StringBuilder(0);
+        final HashMap<String, ManagedEvent> managedEvents = Statics.rulesManager.events.copy();
+        for (final Map.Entry<String, ManagedEvent> entry : managedEvents.entrySet()) {
+            final String eventId = entry.getKey();
+            final ManagedEvent managedEvent = entry.getValue();
+            if (managedEvent == null) {
+                logger.error("null managedEvent in getCloseWindowContentText for: {}", eventId);
+            } else {
+                final double eventExposure = managedEvent.calculateExposure();
+                final double eventLimit = managedEvent.getAmountLimit(Statics.existingFunds);
+                final double amountOverLimit = eventExposure - eventLimit;
+                if (amountOverLimit >= .01d) {
+                    managedEventsOverLimit.append(eventId).append(" name:").append(managedEvent.simpleGetEventName()).append(" amount:").append(amountOverLimit).append("\n");
+                } else { // limit is not breached, nothing to be done
+                }
+            }
+        }
+        final StringBuilder unmatchedBetsOnUnmanagedMarkets = new StringBuilder(0), unmanagedMarketsWithMatchedExposure = new StringBuilder(0), managedMarketsAndRunnersOverLimit = new StringBuilder(0);
+        for (final Map.Entry<String, ManagedMarket> entry : managedMarkets.entrySet()) {
+            final String marketId = entry.getKey();
+            final ManagedMarket managedMarket = entry.getValue();
+            if (managedMarket == null) {
+                logger.error("null managedMarket {} in getCloseWindowContentText", marketId);
+            } else {
+                final double marketTotalExposure = managedMarket.getMarketTotalExposure();
+                if (managedMarket.isEnabledMarket()) {
+                    final double marketLimit = managedMarket.getCalculatedLimit();
+                    final double amountOverLimit = marketTotalExposure - marketLimit;
+                    if (amountOverLimit >= .01d) {
+                        managedMarketsAndRunnersOverLimit.append(marketId).append(" marketName:").append(managedMarket.simpleGetMarketName()).append(" amount:").append(amountOverLimit).append("\n");
+                    } else { // limit is not breached, nothing to be done
+                    }
+                    final HashMap<RunnerId, ManagedRunner> runners = managedMarket.simpleGetRunnersMap();
+                    for (final Map.Entry<RunnerId, ManagedRunner> runnerEntry : runners.entrySet()) {
+                        final RunnerId runnerId = runnerEntry.getKey();
+                        final ManagedRunner managedRunner = runnerEntry.getValue();
+                        if (managedRunner == null) {
+                            logger.error("null managedRunner {} {} in getCloseWindowContentText", marketId, runnerId);
+                        } else {
+                            final double backRunnerLimit = managedRunner.getBackAmountLimit(), layRunnerLimit = managedRunner.getLayAmountLimit(), backExposure = managedRunner.getBackTotalExposure(), layExposure = managedRunner.getLayTotalExposure();
+                            final double backOverLimit = backExposure - backRunnerLimit, layOverLimit = layExposure - layRunnerLimit;
+                            if (backOverLimit >= .01d) {
+                                managedMarketsAndRunnersOverLimit.append(marketId).append(" marketName:").append(managedMarket.simpleGetMarketName()).append(runnerId).append(" back amount:").append(backOverLimit).append("\n");
+                            } else { // limit is not breached, nothing to be done
+                            }
+                            if (layOverLimit >= .01d) {
+                                managedMarketsAndRunnersOverLimit.append(marketId).append(" marketName:").append(managedMarket.simpleGetMarketName()).append(runnerId).append(" lay amount:").append(layOverLimit).append("\n");
+                            } else { // limit is not breached, nothing to be done
+                            }
+                        }
+                    }
+                } else {
+                    final double marketMatchedExposure = managedMarket.getMarketMatchedExposure();
+                    final double marketUnmatchedExposure = marketTotalExposure - marketMatchedExposure;
+                    if (marketMatchedExposure >= .01d) {
+                        unmanagedMarketsWithMatchedExposure.append(marketId).append(" marketName:").append(managedMarket.simpleGetMarketName()).append(" amount:").append(marketMatchedExposure).append("\n");
+                    } else { // limit is not breached, nothing to be done
+                    }
+                    if (marketUnmatchedExposure >= .01d) {
+                        unmatchedBetsOnUnmanagedMarkets.append(marketId).append(" marketName:").append(managedMarket.simpleGetMarketName()).append(" amount:").append(marketUnmatchedExposure).append("\n");
+                    } else { // limit is not breached, nothing to be done
+                    }
+                }
+            }
+        }
+
+        if (unmatchedBetsOnUnmanagedMarkets.length() > 0) {
+            contentText.append("Unmatched bets on unmanaged markets:\n").append(unmatchedBetsOnUnmanagedMarkets).append("\n");
+        } else { // will only append if builder not empty
+        }
+        if (unmanagedMarketsWithMatchedExposure.length() > 0) {
+            contentText.append("Unmanaged markets with matched exposure:\n").append(unmanagedMarketsWithMatchedExposure).append("\n");
+        } else { // will only append if builder not empty
+        }
+        if (managedEventsOverLimit.length() > 0) {
+            contentText.append("Managed events over limit:\n").append(managedEventsOverLimit).append("\n");
+        } else { // will only append if builder not empty
+        }
+        if (managedMarketsAndRunnersOverLimit.length() > 0) {
+            contentText.append("Managed markets and runners over limit:\n").append(managedMarketsAndRunnersOverLimit).append("\n");
+        } else { // will only append if builder not empty
+        }
+        return contentText;
     }
 
     static void handleDoubleTextField(@NotNull final TextField textField, final double value) {

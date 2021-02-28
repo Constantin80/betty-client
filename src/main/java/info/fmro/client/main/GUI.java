@@ -221,6 +221,15 @@ public class GUI
         SharedStatics.mustStop.set(true);
         //noinspection AssignmentToStaticFieldFromInstanceMethod
         GUI.platformStopped = true;
+
+        final StringBuilder contentText = GUIUtils.getCloseWindowContentText();
+        if (contentText.length() > 0) {
+            final Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Application Close");
+            alert.setContentText(contentText.toString());
+            alert.show();
+        } else { // no alert to show
+        }
     }
 
     @Override
@@ -1791,7 +1800,7 @@ public class GUI
 //    }
 
     @SuppressWarnings({"ValueOfIncrementOrDecrementUsed", "OverlyLongMethod", "OverlyComplexMethod"})
-    private static int showRunner(final String marketId, final RunnerId runnerId, final ManagedRunner managedRunner, final MarketRunner marketRunner, final MarketCatalogue marketCatalogue, final Market market, final int previousLinesRowIndex,
+    private static int showRunner(final String marketId, final RunnerId runnerId, final ManagedRunner managedRunner, final MarketRunner marketRunner, final MarketCatalogue marketCatalogue, final Market market, final int previousAppendRowIndex,
                                   final int runnerRowIndex) {
         final boolean isActive = managedRunner != null && managedRunner.isActive(market);
         final String runnerName = marketCatalogue == null ? null : marketCatalogue.getRunnerName(runnerId);
@@ -1990,29 +1999,29 @@ public class GUI
             alert.close();
         });
 
-        int currentLine = previousLinesRowIndex;
+        int currentAppendRowIndex = previousAppendRowIndex;
 
         for (final Map.Entry<Double, Double> entry : myUnmatchedBack.entrySet()) {
-            mainGridPane.add(new Label("back: " + decimalFormatLabelLow.format(entry.getKey())), 0, currentLine);
-            mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(entry.getValue())), 1, currentLine++);
+            mainGridPane.add(new Label("back: " + decimalFormatLabelLow.format(entry.getKey())), 0, currentAppendRowIndex);
+            mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(entry.getValue())), 1, currentAppendRowIndex++);
         }
         for (final Map.Entry<Double, Double> entry : myUnmatchedLay.entrySet()) {
-            mainGridPane.add(new Label("lay:  " + decimalFormatLabelLow.format(entry.getKey())), 0, currentLine);
-            mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(entry.getValue())), 1, currentLine++);
+            mainGridPane.add(new Label("lay:  " + decimalFormatLabelLow.format(entry.getKey())), 0, currentAppendRowIndex);
+            mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(entry.getValue())), 1, currentAppendRowIndex++);
         }
         for (@NotNull final TemporaryOrder temporaryOrder : myTempOrders) {
             final TemporaryOrderType temporaryOrderType = temporaryOrder.getType();
             if (temporaryOrderType == TemporaryOrderType.PLACE) {
-                mainGridPane.add(new Label("temp" + temporaryOrder.getSide() + ":  " + decimalFormatLabelLow.format(temporaryOrder.getPrice())), 0, currentLine);
-                mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(temporaryOrder.getSize())), 1, currentLine++);
+                mainGridPane.add(new Label("temp" + temporaryOrder.getSide() + ":  " + decimalFormatLabelLow.format(temporaryOrder.getPrice())), 0, currentAppendRowIndex);
+                mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(temporaryOrder.getSize())), 1, currentAppendRowIndex++);
             } else {
-                mainGridPane.add(new Label("cancel" + temporaryOrder.getSide() + ":  " + decimalFormatLabelLow.format(temporaryOrder.getPrice())), 0, currentLine);
+                mainGridPane.add(new Label("cancel" + temporaryOrder.getSide() + ":  " + decimalFormatLabelLow.format(temporaryOrder.getPrice())), 0, currentAppendRowIndex);
                 final Double sizeReduction = temporaryOrder.getSizeReduction();
-                mainGridPane.add(new Label("€" + (sizeReduction == null ? "max" : GUIUtils.decimalFormat(sizeReduction))), 1, currentLine++);
+                mainGridPane.add(new Label("€" + (sizeReduction == null ? "max" : GUIUtils.decimalFormat(sizeReduction))), 1, currentAppendRowIndex++);
             }
         }
 
-        return currentLine;
+        return currentAppendRowIndex;
     }
 
     static void pauseRefresh() {
@@ -2187,8 +2196,7 @@ public class GUI
                 mainGridPane.add(marketIsEnabledLabel, 0, rowIndex++);
 
                 int runnerIndex = 0;
-                @NotNull final LinkedHashMap<RunnerId, ManagedRunner> managedRunners =
-                        managedMarket.getRunners(Statics.rulesManager, Statics.marketCataloguesMap);
+                @NotNull final LinkedHashMap<RunnerId, ManagedRunner> managedRunners = managedMarket.getRunners(Statics.rulesManager, Statics.marketCataloguesMap);
                 final HashMap<RunnerId, MarketRunner> allRunners = cachedMarket == null ? null : cachedMarket.getMarketRunners();
                 for (@NotNull final Map.Entry<RunnerId, ManagedRunner> entry : managedRunners.entrySet()) {
                     final RunnerId runnerId = entry.getKey();

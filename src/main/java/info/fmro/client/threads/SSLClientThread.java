@@ -52,6 +52,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @SuppressWarnings({"OverlyComplexClass", "OverlyCoupledClass"})
 public class SSLClientThread
@@ -430,8 +431,17 @@ public class SSLClientThread
                         if (objectsToModify != null && objectsToModify.length == 1) {
                             if (objectsToModify[0] instanceof TemporaryOrder) {
                                 @NotNull final TemporaryOrder temporaryOrder = (TemporaryOrder) objectsToModify[0];
-                                SharedStatics.orderCache.addTempOrder(temporaryOrder);
+
                                 final String marketId = temporaryOrder.getMarketId();
+                                final RunnerId runnerId = temporaryOrder.getRunnerId();
+                                ManagedRunner managedRunner = Statics.rulesManager.getManagedRunner(marketId, runnerId);
+                                if (managedRunner == null) {
+                                    logger.error("null managedRunner in addTempOrder for: {} {}", marketId, runnerId);
+                                    managedRunner = new ManagedRunner(marketId, runnerId, new AtomicBoolean(), new AtomicBoolean());
+                                } else { // found the managedRunner, nothing to be done
+                                }
+                                SharedStatics.orderCache.addTempOrder(temporaryOrder, managedRunner);
+
                                 final String eventId = Formulas.getEventIdOfMarketId(marketId, Statics.marketCataloguesMap);
                                 GUI.managedMarketUpdated(marketId);
                                 GUI.managedEventUpdated(eventId);
