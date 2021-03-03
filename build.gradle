@@ -1,7 +1,7 @@
 plugins {
     id 'idea'
     id 'application'
-    id 'org.openjfx.javafxplugin' version '0.0.8'
+    id 'org.openjfx.javafxplugin' version '0.0.9'
     id 'com.github.johnrengelman.shadow' version '5.2.0'
 }
 
@@ -59,4 +59,6 @@ dependencies {
     testImplementation group: 'com.jayway.awaitility', name: 'awaitility', version: '1.7.0'
     testImplementation('org.junit.jupiter:junit-jupiter-api:5.7.1')
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.7.1"
+    testImplementation group: 'org.springframework', name: 'spring-test', version: '5.3.4'
+    testImplementation group: 'org.springframework', name: 'spring-context', version: '5.3.4'
 }
