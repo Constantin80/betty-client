@@ -57,11 +57,15 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCodeCombination;
+import javafx.scene.input.KeyCombination;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.input.Mnemonic;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.stage.Modality;
@@ -123,7 +127,7 @@ public class GUI
             marketsTreeItemMap = new DualHashBidiMap<>();
     private static final TreeItem<String> leftEventTreeRoot = new TreeItem<>(), rightEventTreeRoot = new TreeItem<>();
     private static final ObservableList<TreeItem<String>> leftEventRootChildrenList = leftEventTreeRoot.getChildren(), rightEventRootChildrenList = rightEventTreeRoot.getChildren();
-    private static final GridPane mainGridPane = new GridPane();
+    static final GridPane mainGridPane = new GridPane();
     private static final ScrollPane mainScrollPane = new ScrollPane();
     private static final TreeView<String> leftTreeView = createTreeView(leftEventTreeRoot), rightTreeView = createTreeView(rightEventTreeRoot);
     private static final VBox rightVBox = new VBox(rightTreeView);
@@ -221,15 +225,6 @@ public class GUI
         SharedStatics.mustStop.set(true);
         //noinspection AssignmentToStaticFieldFromInstanceMethod
         GUI.platformStopped = true;
-
-        final StringBuilder contentText = GUIUtils.getCloseWindowContentText();
-        if (contentText.length() > 0) {
-            final Alert alert = new Alert(Alert.AlertType.INFORMATION);
-            alert.setTitle("Application Close");
-            alert.setContentText(contentText.toString());
-            alert.show();
-        } else { // no alert to show
-        }
     }
 
     @Override
@@ -272,7 +267,7 @@ public class GUI
         }
     }
 
-    @SuppressWarnings({"unchecked", "OverlyLongMethod"})
+    @SuppressWarnings({"unchecked", "OverlyLongMethod", "OverlyComplexMethod"})
     private static void runLaterCore() {
         PlatformRunLaterCommand<PlatformRunLaterEnum> platformRunLaterCommand;
         //noinspection NestedAssignment
@@ -280,7 +275,7 @@ public class GUI
             final PlatformRunLaterEnum platformRunLaterEnum = platformRunLaterCommand.getCommand();
             final Serializable[] variables = platformRunLaterCommand.getArray();
             switch (platformRunLaterEnum) {
-                case refreshDisplayedManagedObject -> refreshDisplayedManagedObject();
+                case refreshDisplayedManagedObject -> refreshDisplayedManagedObject((boolean) variables[0]);
                 case managedMarketUpdated -> updateCurrentManagedMarket((String) variables[0]);
                 case managedEventUpdated -> updateCurrentManagedEvent((String) variables[0]);
                 case updateTotalFundsLabel -> totalFundsLabel.setText((String) variables[0]);
@@ -382,7 +377,11 @@ public class GUI
     }
 
     public static void publicRefreshDisplayedManagedObject() {
-        addCommand(PlatformRunLaterEnum.refreshDisplayedManagedObject);
+        publicRefreshDisplayedManagedObject(false);
+    }
+
+    public static void publicRefreshDisplayedManagedObject(final boolean nonExistentManagedObjectIsAcceptable) {
+        addCommand(PlatformRunLaterEnum.refreshDisplayedManagedObject, nonExistentManagedObjectIsAcceptable);
     }
 
     public static void managedMarketUpdated(final String marketId) {
@@ -1696,14 +1695,18 @@ public class GUI
 //        return result;
 //    }
     private static void refreshDisplayedManagedObject() {
+        refreshDisplayedManagedObject(false);
+    }
+
+    private static void refreshDisplayedManagedObject(final boolean nonExistentManagedObjectIsAcceptable) {
         if (currentlyShownManagedObject == null) { // no event displayed, nothing to be done
         } else {
             final String marketId = managedMarketsTreeItemMap.getKey(currentlyShownManagedObject);
             if (marketId == null) {
                 final String eventId = managedEventsTreeItemMap.getKey(currentlyShownManagedObject);
-                showManagedEvent(eventId, currentlyShownManagedObject);
+                showManagedEvent(eventId, currentlyShownManagedObject, nonExistentManagedObjectIsAcceptable);
             } else {
-                showManagedMarket(marketId, currentlyShownManagedObject);
+                showManagedMarket(marketId, currentlyShownManagedObject, nonExistentManagedObjectIsAcceptable);
             }
         }
     }
@@ -1728,13 +1731,16 @@ public class GUI
         }
     }
 
-//    private static void showManagedEvent(final TreeItem<String> currentEvent) {
+    //    private static void showManagedEvent(final TreeItem<String> currentEvent) {
 //        final String eventId = managedEventsTreeItemMap.getKey(currentEvent);
 //        showManagedEvent(eventId, currentEvent);
 //    }
+    private static void showManagedEvent(final String eventId, final TreeItem<String> currentEvent) {
+        showManagedEvent(eventId, currentEvent, false);
+    }
 
     @SuppressWarnings("ValueOfIncrementOrDecrementUsed")
-    private static void showManagedEvent(final String eventId, final TreeItem<String> currentEvent) {
+    private static void showManagedEvent(final String eventId, final TreeItem<String> currentEvent, final boolean nonExistentManagedObjectIsAcceptable) {
         if (refreshPaused.get()) { // refresh is paused, refresh will happen when pause ends
             refreshQueued.set(true);
         } else {
@@ -1743,7 +1749,11 @@ public class GUI
             // eventName(ManagedEvent or newValue), amountLimit/simpleAmountLimit(ManagedEvent), nManagedMarkets(ManagedEvent or nChildren of TreeItem), nTotalMarkets(Event), "open for" timer, starting at "open date"(Event)
             final ManagedEvent managedEvent = Statics.rulesManager.events.get(eventId);
             if (managedEvent == null) {
-                logger.error("null managedEvent in left listener for: {} {}", currentEvent, eventId);
+                if (nonExistentManagedObjectIsAcceptable) {
+                    logger.info("null managedEvent in left listener for: {} {}", currentEvent, eventId);
+                } else {
+                    logger.error("null managedEvent in left listener for: {} {}", currentEvent, eventId);
+                }
             } else {
                 final Event event = Statics.eventsMap.get(eventId);
                 updateEventName(currentEvent, eventId, managedEvent);
@@ -1961,6 +1971,7 @@ public class GUI
             alert.setHeaderText("You are setting preferredSide on runner: " + runnerName + " (marketId:" + marketId + " " + runnerId + ")");
             alert.initModality(Modality.APPLICATION_MODAL);
             alert.initOwner(mainStage);
+            mainGridPane.requestFocus();
             final Optional<ButtonType> result = alert.showAndWait();
             if (result.isPresent()) {
                 if (result.get() == back) {
@@ -1983,6 +1994,7 @@ public class GUI
             alert.setHeaderText("You are setting preferredSide on runner: " + runnerName + " (marketId:" + marketId + " " + runnerId + ")");
             alert.initModality(Modality.APPLICATION_MODAL);
             alert.initOwner(mainStage);
+            mainGridPane.requestFocus();
             final Optional<ButtonType> result = alert.showAndWait();
             if (result.isPresent()) {
                 if (result.get() == back) {
@@ -2002,22 +2014,26 @@ public class GUI
         int currentAppendRowIndex = previousAppendRowIndex;
 
         for (final Map.Entry<Double, Double> entry : myUnmatchedBack.entrySet()) {
-            mainGridPane.add(new Label("back: " + decimalFormatLabelLow.format(entry.getKey())), 0, currentAppendRowIndex);
-            mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(entry.getValue())), 1, currentAppendRowIndex++);
+            mainGridPane.add(new Label(runnerName), 0, currentAppendRowIndex);
+            mainGridPane.add(new Label("back: " + decimalFormatLabelLow.format(entry.getKey())), 1, currentAppendRowIndex);
+            mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(entry.getValue())), 2, currentAppendRowIndex++);
         }
         for (final Map.Entry<Double, Double> entry : myUnmatchedLay.entrySet()) {
-            mainGridPane.add(new Label("lay:  " + decimalFormatLabelLow.format(entry.getKey())), 0, currentAppendRowIndex);
-            mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(entry.getValue())), 1, currentAppendRowIndex++);
+            mainGridPane.add(new Label(runnerName), 0, currentAppendRowIndex);
+            mainGridPane.add(new Label("lay:  " + decimalFormatLabelLow.format(entry.getKey())), 1, currentAppendRowIndex);
+            mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(entry.getValue())), 2, currentAppendRowIndex++);
         }
         for (@NotNull final TemporaryOrder temporaryOrder : myTempOrders) {
             final TemporaryOrderType temporaryOrderType = temporaryOrder.getType();
             if (temporaryOrderType == TemporaryOrderType.PLACE) {
-                mainGridPane.add(new Label("temp" + temporaryOrder.getSide() + ":  " + decimalFormatLabelLow.format(temporaryOrder.getPrice())), 0, currentAppendRowIndex);
-                mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(temporaryOrder.getSize())), 1, currentAppendRowIndex++);
+                mainGridPane.add(new Label(runnerName), 0, currentAppendRowIndex);
+                mainGridPane.add(new Label("temp" + temporaryOrder.getSide() + ": " + decimalFormatLabelLow.format(temporaryOrder.getPrice())), 1, currentAppendRowIndex);
+                mainGridPane.add(new Label("€" + GUIUtils.decimalFormat(temporaryOrder.getSize())), 2, currentAppendRowIndex++);
             } else {
-                mainGridPane.add(new Label("cancel" + temporaryOrder.getSide() + ":  " + decimalFormatLabelLow.format(temporaryOrder.getPrice())), 0, currentAppendRowIndex);
+                mainGridPane.add(new Label(runnerName), 0, currentAppendRowIndex);
+                mainGridPane.add(new Label("cancel" + temporaryOrder.getSide() + ": " + decimalFormatLabelLow.format(temporaryOrder.getPrice())), 1, currentAppendRowIndex);
                 final Double sizeReduction = temporaryOrder.getSizeReduction();
-                mainGridPane.add(new Label("€" + (sizeReduction == null ? "max" : GUIUtils.decimalFormat(sizeReduction))), 1, currentAppendRowIndex++);
+                mainGridPane.add(new Label("€" + (sizeReduction == null ? "max" : GUIUtils.decimalFormat(sizeReduction))), 2, currentAppendRowIndex++);
             }
         }
 
@@ -2089,8 +2105,12 @@ public class GUI
         }
     }
 
-    @SuppressWarnings({"OverlyLongMethod", "ValueOfIncrementOrDecrementUsed"})
     private static void showManagedMarket(final String marketId, final TreeItem<String> currentMarket) {
+        showManagedMarket(marketId, currentMarket, false);
+    }
+
+    @SuppressWarnings({"OverlyLongMethod", "ValueOfIncrementOrDecrementUsed"})
+    private static void showManagedMarket(final String marketId, final TreeItem<String> currentMarket, final boolean nonExistentManagedObjectIsAcceptable) {
         if (refreshPaused.get()) { // refresh is paused, refresh will happen when pause ends
             refreshQueued.set(true);
         } else {
@@ -2106,7 +2126,11 @@ public class GUI
             // (MarketRunner): list of 10 values on each side with price/size for traded amounts --> maybe not, occupies too much space and is not a priority, can be added later
             final ManagedMarket managedMarket = Statics.rulesManager.markets.get(marketId);
             if (managedMarket == null) {
-                logger.error("null managedMarket in left listener for: {} {}", currentMarket, marketId);
+                if (nonExistentManagedObjectIsAcceptable) {
+                    logger.info("null managedMarket in left listener for: {} {}", currentMarket, marketId);
+                } else {
+                    logger.error("null managedMarket in left listener for: {} {}", currentMarket, marketId);
+                }
             } else {
                 final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
                 final Market cachedMarket = SharedStatics.marketCache.getMarket(marketId);
@@ -2245,7 +2269,7 @@ public class GUI
         if (nScreens == 2) {
             chosenScreen = screens.get(1);
         } else {
-            logger.error("wrong nScreens in GUI initial window creation: {}", nScreens);
+//            logger.error("wrong nScreens in GUI initial window creation: {}", nScreens);
             chosenScreen = Screen.getPrimary();
         }
         @NotNull final Rectangle2D screenBounds = chosenScreen.getBounds();
@@ -2290,7 +2314,7 @@ public class GUI
         GUIUtils.setOnKeyPressedFilterTextField(filterTextField, rightEventTreeRoot);
         rightVBox.getChildren().add(filterTextField);
 
-        final Button rightPaneButton = new Button("Show _events");
+        final Button rightPaneButton = new Button("Show events");
         rightPaneButton.setMnemonicParsing(true);
         rightPaneButton.setOnAction(event -> {
             if (rightPanelVisible) {
@@ -2298,10 +2322,9 @@ public class GUI
                 GUI.rightPanelVisible = false;
                 processMarketsForRemoval();
                 processEventsForRemoval();
-
                 mainSplitPaneNodesList.remove(rightVBox);
                 topBarNodesList.remove(refreshEventsButton);
-                rightPaneButton.setText("Show _events");
+                rightPaneButton.setText("Show events");
             } else {
                 //noinspection AssignmentToStaticFieldFromInstanceMethod
                 GUI.rightPanelVisible = true; // needs to be in the beginning, else the following methods that rely on condition "rightPanelVisible is true" will not work
@@ -2309,19 +2332,21 @@ public class GUI
                 refreshEventsButton.fire();
 
                 mainSplitPaneNodesList.add(rightVBox);
-                filterTextField.requestFocus();
-                filterTextField.end();
 
 //                mainSplitPane.setDividerPositions(.09, .91);
 //                mainSplitPane.setDividerPosition(1, .91d);
                 topBarNodesList.add(topBarNodesList.size() - 1, refreshEventsButton);
-                rightPaneButton.setText("Hide _events");
-
+                rightPaneButton.setText("Hide events");
                 initializeRightTreeView();
+
+                filterTextField.requestFocus();
+                filterTextField.end();
             }
+            event.consume();
         });
 
         topBarNodesList.addAll(fixedTotalFundsLabel, totalFundsLabel, fixedAvailableLabel, availableLabel, fixedReserveLabel, reserveLabel, fixedExposureLabel, exposureLabel, hugeSpacer, rightPaneButton);
+        mainScene.addMnemonic(new Mnemonic(rightPaneButton, new KeyCodeCombination(KeyCode.E, KeyCombination.ALT_DOWN))); // mnemonic added manually because when added automatically the textField doesn't get focus
 
 //        rightTreeView.setOnMouseClicked(ae -> {
 //            @NotNull final TreeItem<String> selectedItem = rightTreeView.getSelectionModel().getSelectedItem();
@@ -2603,11 +2628,31 @@ public class GUI
 //        });
 
         rootVBox.requestFocus(); // removes focus from some element that was unwantedly focused by default
+
         primaryStage.show();
-//        mainSplitPane.setDividerPositions(.09, .91);
+        primaryStage.toFront();
+
+        //        mainSplitPane.setDividerPositions(.09, .91);
 //        mainSplitPane.setDividerPosition(0, .09d);
 
         Statics.scheduledThreadPoolExecutor.scheduleAtFixedRate(GUI::checkTreeItemsWithNullName, 1L, 1L, TimeUnit.MINUTES);
+
+        primaryStage.setOnCloseRequest(event -> {
+            final StringBuilder contentText = GUIUtils.getCloseWindowContentText();
+            if (contentText.isEmpty()) { // no alert to show
+            } else {
+                final Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle("Application Close");
+                alert.setContentText(contentText.toString());
+                alert.initModality(Modality.APPLICATION_MODAL);
+                alert.initOwner(primaryStage);
+                alert.setResizable(true);
+                alert.getDialogPane().setPrefWidth(1920);
+                alert.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
+                alert.getDialogPane().setMinWidth(Region.USE_PREF_SIZE);
+                alert.showAndWait();
+            }
+        });
 
         logger.info("GUI has started");
 //        hasStarted.countDown();

@@ -152,27 +152,27 @@ final class GUIUtils {
 
     @Nullable
     private static String getManagedEventNameFromMarketCatalogue(final MarketCatalogue marketCatalogue, @NotNull final String eventId) {
-        @Nullable final String name;
+        @Nullable final String eventName;
         if (marketCatalogue == null) {
             logger.error("null marketCatalogue found during getManagedEventNameFromMarketCatalogue for: {}", eventId);
             Statics.marketCataloguesMap.superRemoveValueAll(null);
-            name = null;
+            eventName = null;
         } else {
             final Event eventStump = marketCatalogue.getEventStump();
             if (eventStump == null) { // might be normal
-                name = null;
+                eventName = null;
             } else {
-                final String eventName = eventStump.getName();
-                if (eventName == null) { // might be normal
-                    name = null;
+                final String eventStumpName = eventStump.getName();
+                if (eventStumpName == null) { // might be normal
+                    eventName = null;
                 } else {
                     final String idFromStump = eventStump.getId();
                     final boolean marketContainsTheRightEvent = Objects.equals(eventId, idFromStump);
-                    name = marketContainsTheRightEvent ? eventName : null;
+                    eventName = marketContainsTheRightEvent ? eventStumpName : null;
                 }
             }
         }
-        return name;
+        return eventName;
     }
 
     static boolean eventExistsInMap(final String eventId) {
@@ -406,7 +406,76 @@ final class GUIUtils {
         });
     }
 
+    @Nullable
+    private static String getRunnerNameFromMarketAndRunnerId(final String marketId, final RunnerId runnerId) {
+        final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
+        return getRunnerNameFromMarketCatalogue(marketCatalogue, runnerId);
+    }
+
+    @Nullable
+    private static String getRunnerNameFromMarketCatalogue(final MarketCatalogue marketCatalogue, final RunnerId runnerId) {
+        @Nullable final String runnerName;
+        if (marketCatalogue == null) {
+            logger.error("null marketCatalogue found in getRunnerNameFromMarketCatalogue for: {}", runnerId);
+            Statics.marketCataloguesMap.superRemoveValueAll(null);
+            runnerName = null;
+        } else {
+            runnerName = marketCatalogue.getRunnerName(runnerId);
+        }
+        return runnerName;
+    }
+
+    @Nullable
+    private static String getManagedEventNameFromMarketId(final String marketId) {
+        final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
+        return getManagedEventNameFromMarketCatalogue(marketCatalogue);
+    }
+
+    @Nullable
+    private static String getManagedEventNameFromMarketCatalogue(final MarketCatalogue marketCatalogue) {
+        @Nullable final String eventName;
+        if (marketCatalogue == null) {
+            logger.error("null marketCatalogue found during getManagedEventNameFromMarketCatalogue");
+            Statics.marketCataloguesMap.superRemoveValueAll(null);
+            eventName = null;
+        } else {
+            final Event eventStump = marketCatalogue.getEventStump();
+            if (eventStump == null) { // might be normal
+                eventName = null;
+            } else {
+                eventName = eventStump.getName();
+            }
+        }
+        return eventName;
+    }
+
+    @Nullable
+    private static String getManagedEventIdFromMarketId(final String marketId) {
+        final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
+        return getManagedEventIdFromMarketCatalogue(marketCatalogue);
+    }
+
+    @Nullable
+    private static String getManagedEventIdFromMarketCatalogue(final MarketCatalogue marketCatalogue) {
+        @Nullable final String eventId;
+        if (marketCatalogue == null) {
+            logger.error("null marketCatalogue found during getManagedEventIdFromMarketCatalogue");
+            Statics.marketCataloguesMap.superRemoveValueAll(null);
+            eventId = null;
+        } else {
+            final Event eventStump = marketCatalogue.getEventStump();
+            if (eventStump == null) { // might be normal
+                eventId = null;
+            } else {
+                eventId = eventStump.getId();
+            }
+        }
+        return eventId;
+    }
+
+    @SuppressWarnings({"OverlyNestedMethod", "OverlyLongMethod"})
     static StringBuilder getCloseWindowContentText() {
+        Statics.rulesManager.calculateMarketLimits(Statics.existingFunds, Statics.marketCataloguesMap);
         final StringBuilder contentText = new StringBuilder(0);
         final Set<String> managedMarketIds = Statics.rulesManager.getManagedMarketIds();
         final HashMap<String, OrderMarket> orderMarketsWithoutManagedMarket = SharedStatics.orderCache.markets.copy();
@@ -417,13 +486,13 @@ final class GUIUtils {
             logger.error("{} orderMarketsWithoutManagedMarket: {}", size, Generic.objectToString(orderMarketsWithoutManagedMarket));
             contentText.append("ERROR: ").append(size).append(" orderMarketsWithoutManagedMarket present\n\n");
         }
-        final HashMap<String, ManagedMarket> managedMarkets = Statics.rulesManager.markets.copy();
-        for (final ManagedMarket managedMarket : managedMarkets.values()) {
-            if (managedMarket == null) { // error message is printed further down
-            } else {
-                managedMarket.calculateExposure(Statics.rulesManager, true);
-            }
-        }
+//        for (final ManagedMarket managedMarket : managedMarkets.values()) {
+//            if (managedMarket == null) { // error message is printed further down
+//            } else {
+//                managedMarket.calculateExposure(Statics.rulesManager, true);
+//            }
+//        }
+
         final StringBuilder managedEventsOverLimit = new StringBuilder(0);
         final HashMap<String, ManagedEvent> managedEvents = Statics.rulesManager.events.copy();
         for (final Map.Entry<String, ManagedEvent> entry : managedEvents.entrySet()) {
@@ -432,16 +501,17 @@ final class GUIUtils {
             if (managedEvent == null) {
                 logger.error("null managedEvent in getCloseWindowContentText for: {}", eventId);
             } else {
-                final double eventExposure = managedEvent.calculateExposure();
+                final double eventExposure = managedEvent.calculateExposureWithMarketExposuresAlreadyCalculated();
                 final double eventLimit = managedEvent.getAmountLimit(Statics.existingFunds);
                 final double amountOverLimit = eventExposure - eventLimit;
                 if (amountOverLimit >= .01d) {
-                    managedEventsOverLimit.append(eventId).append(" name:").append(managedEvent.simpleGetEventName()).append(" amount:").append(amountOverLimit).append("\n");
+                    managedEventsOverLimit.append(eventId).append(" name:").append(managedEvent.simpleGetEventName()).append(" amount:").append(Generic.roundDouble(amountOverLimit)).append("\n");
                 } else { // limit is not breached, nothing to be done
                 }
             }
         }
         final StringBuilder unmatchedBetsOnUnmanagedMarkets = new StringBuilder(0), unmanagedMarketsWithMatchedExposure = new StringBuilder(0), managedMarketsAndRunnersOverLimit = new StringBuilder(0);
+        final HashMap<String, ManagedMarket> managedMarkets = Statics.rulesManager.markets.copy();
         for (final Map.Entry<String, ManagedMarket> entry : managedMarkets.entrySet()) {
             final String marketId = entry.getKey();
             final ManagedMarket managedMarket = entry.getValue();
@@ -453,7 +523,10 @@ final class GUIUtils {
                     final double marketLimit = managedMarket.getCalculatedLimit();
                     final double amountOverLimit = marketTotalExposure - marketLimit;
                     if (amountOverLimit >= .01d) {
-                        managedMarketsAndRunnersOverLimit.append(marketId).append(" marketName:").append(managedMarket.simpleGetMarketName()).append(" amount:").append(amountOverLimit).append("\n");
+                        final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
+                        final String eventId = getManagedEventIdFromMarketCatalogue(marketCatalogue), eventName = getManagedEventNameFromMarketCatalogue(marketCatalogue);
+                        managedMarketsAndRunnersOverLimit.append(eventName).append("(").append(eventId).append(") ").append(managedMarket.simpleGetMarketName()).append("(").append(marketId).append(") amount:").append(Generic.roundDouble(amountOverLimit)).
+                                append("\n");
                     } else { // limit is not breached, nothing to be done
                     }
                     final HashMap<RunnerId, ManagedRunner> runners = managedMarket.simpleGetRunnersMap();
@@ -466,11 +539,27 @@ final class GUIUtils {
                             final double backRunnerLimit = managedRunner.getBackAmountLimit(), layRunnerLimit = managedRunner.getLayAmountLimit(), backExposure = managedRunner.getBackTotalExposure(), layExposure = managedRunner.getLayTotalExposure();
                             final double backOverLimit = backExposure - backRunnerLimit, layOverLimit = layExposure - layRunnerLimit;
                             if (backOverLimit >= .01d) {
-                                managedMarketsAndRunnersOverLimit.append(marketId).append(" marketName:").append(managedMarket.simpleGetMarketName()).append(runnerId).append(" back amount:").append(backOverLimit).append("\n");
+                                final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
+                                final String eventId = getManagedEventIdFromMarketCatalogue(marketCatalogue), eventName = getManagedEventNameFromMarketCatalogue(marketCatalogue), runnerName = getRunnerNameFromMarketCatalogue(marketCatalogue, runnerId);
+                                managedMarketsAndRunnersOverLimit.append(eventName).append("(").append(eventId).append(") ").append(managedMarket.simpleGetMarketName()).append("(").append(marketId).append(") ");
+                                if (runnerName == null) {
+                                    managedMarketsAndRunnersOverLimit.append(runnerId);
+                                } else {
+                                    managedMarketsAndRunnersOverLimit.append(runnerName);
+                                }
+                                managedMarketsAndRunnersOverLimit.append(" backAmount:").append(Generic.roundDouble(backOverLimit)).append("\n");
                             } else { // limit is not breached, nothing to be done
                             }
                             if (layOverLimit >= .01d) {
-                                managedMarketsAndRunnersOverLimit.append(marketId).append(" marketName:").append(managedMarket.simpleGetMarketName()).append(runnerId).append(" lay amount:").append(layOverLimit).append("\n");
+                                final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
+                                final String eventId = getManagedEventIdFromMarketCatalogue(marketCatalogue), eventName = getManagedEventNameFromMarketCatalogue(marketCatalogue), runnerName = getRunnerNameFromMarketCatalogue(marketCatalogue, runnerId);
+                                managedMarketsAndRunnersOverLimit.append(eventName).append("(").append(eventId).append(") ").append(managedMarket.simpleGetMarketName()).append("(").append(marketId).append(") ");
+                                if (runnerName == null) {
+                                    managedMarketsAndRunnersOverLimit.append(runnerId);
+                                } else {
+                                    managedMarketsAndRunnersOverLimit.append(runnerName);
+                                }
+                                managedMarketsAndRunnersOverLimit.append(" layAmount:").append(Generic.roundDouble(layOverLimit)).append("\n");
                             } else { // limit is not breached, nothing to be done
                             }
                         }
@@ -479,11 +568,17 @@ final class GUIUtils {
                     final double marketMatchedExposure = managedMarket.getMarketMatchedExposure();
                     final double marketUnmatchedExposure = marketTotalExposure - marketMatchedExposure;
                     if (marketMatchedExposure >= .01d) {
-                        unmanagedMarketsWithMatchedExposure.append(marketId).append(" marketName:").append(managedMarket.simpleGetMarketName()).append(" amount:").append(marketMatchedExposure).append("\n");
+                        final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
+                        final String eventId = getManagedEventIdFromMarketCatalogue(marketCatalogue), eventName = getManagedEventNameFromMarketCatalogue(marketCatalogue);
+                        unmanagedMarketsWithMatchedExposure.append(eventName).append("(").append(eventId).append(") ").append(managedMarket.simpleGetMarketName()).append("(").append(marketId).append(") amount:").
+                                append(Generic.roundDouble(marketMatchedExposure)).append("\n");
                     } else { // limit is not breached, nothing to be done
                     }
                     if (marketUnmatchedExposure >= .01d) {
-                        unmatchedBetsOnUnmanagedMarkets.append(marketId).append(" marketName:").append(managedMarket.simpleGetMarketName()).append(" amount:").append(marketUnmatchedExposure).append("\n");
+                        final MarketCatalogue marketCatalogue = Statics.marketCataloguesMap.get(marketId);
+                        final String eventId = getManagedEventIdFromMarketCatalogue(marketCatalogue), eventName = getManagedEventNameFromMarketCatalogue(marketCatalogue);
+                        unmatchedBetsOnUnmanagedMarkets.append(eventName).append("(").append(eventId).append(") ").append(managedMarket.simpleGetMarketName()).append("(").append(marketId).append(") amount:").
+                                append(Generic.roundDouble(marketUnmatchedExposure)).append("\n");
                     } else { // limit is not breached, nothing to be done
                     }
                 }
@@ -611,6 +706,7 @@ final class GUIUtils {
             alert.setContentText("Are you ok with this?");
             alert.initModality(Modality.APPLICATION_MODAL);
             alert.initOwner(mainStage);
+            GUI.mainGridPane.requestFocus();
             final Optional<ButtonType> result = alert.showAndWait();
             if (result.isPresent()) {
                 if (result.get() == ButtonType.OK) {
@@ -644,6 +740,7 @@ final class GUIUtils {
             alert.setContentText("Are you ok with this?");
             alert.initModality(Modality.APPLICATION_MODAL);
             alert.initOwner(mainStage);
+            GUI.mainGridPane.requestFocus();
             final Optional<ButtonType> result = alert.showAndWait();
             if (result.isPresent()) {
                 if (result.get() == ButtonType.OK) {

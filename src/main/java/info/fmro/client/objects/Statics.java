@@ -3,6 +3,7 @@ package info.fmro.client.objects;
 import info.fmro.client.threads.SSLClientThread;
 import info.fmro.shared.entities.Event;
 import info.fmro.shared.entities.MarketCatalogue;
+import info.fmro.shared.objects.SharedStatics;
 
 import java.io.OutputStream;
 import java.util.ArrayList;
@@ -50,4 +51,11 @@ public final class Statics {
     }
 
     public static final Map<String, String> objectFileNamesMap = Collections.unmodifiableMap(privateObjectFileNamesMap);
+
+    public static void clearCachedObjects() {
+        eventsMap.clear();
+        marketCataloguesMap.clear();
+        rulesManager.clearCachedObjects();
+        SharedStatics.clearCachedObjects();
+    }
 }

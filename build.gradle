@@ -1,18 +1,18 @@
 plugins {
     id 'idea'
     id 'application'
-    id 'org.openjfx.javafxplugin' version '0.0.9'
-    id 'com.github.johnrengelman.shadow' version '5.2.0'
+    id 'org.openjfx.javafxplugin' version '0.0.10'
+    id 'com.github.johnrengelman.shadow' version '7.1.0'
 }
 
 group 'info.fmro'
 version '0.1'
 description = "client"
-sourceCompatibility = 14
-targetCompatibility = 14
+sourceCompatibility = 17
+targetCompatibility = 17
 
 javafx {
-    version = "14.0.1"
+    version = "17"
     modules = ['javafx.controls']
 }
 
@@ -25,7 +25,7 @@ shadowJar {
 }
 
 compileJava {
-    options.compilerArgs += ["-Xlint"]
+    options.compilerArgs += ["-Xlint:unchecked", "-Xlint:deprecation"]
 }
 allprojects {
     tasks.withType(JavaCompile) {
@@ -44,21 +44,21 @@ repositories {
 
 dependencies {
     implementation group: 'info.fmro', name: 'shared', version: '0.1'
-    implementation group: 'org.slf4j', name: 'slf4j-api', version: '1.7.30'
-    implementation group: 'org.slf4j', name: 'slf4j-ext', version: '1.7.30'
-    implementation group: 'com.google.guava', name: 'guava', version: '30.1-jre'
-    implementation group: 'com.google.code.gson', name: 'gson', version: '2.8.6'
-    implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
-    implementation group: 'ch.qos.logback', name: 'logback-core', version: '1.2.3'
-    implementation group: 'org.jetbrains', name: 'annotations', version: '20.1.0'
-    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: '2.12.1'
-    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.12.1'
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.11'
+    implementation group: 'org.slf4j', name: 'slf4j-api', version: '2.0.3'
+    implementation group: 'org.slf4j', name: 'slf4j-ext', version: '2.0.3'
+    implementation group: 'com.google.guava', name: 'guava', version: '31.1-jre'
+    implementation group: 'com.google.code.gson', name: 'gson', version: '2.10'
+    implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.4.4'
+    implementation group: 'ch.qos.logback', name: 'logback-core', version: '1.4.4'
+    implementation group: 'org.jetbrains', name: 'annotations', version: '23.0.0'
+    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: '2.14.0'
+    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.14.0'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.12.0'
     implementation group: 'org.apache.commons', name: 'commons-collections4', version: '4.4'
-    testImplementation group: 'org.assertj', name: 'assertj-core', version: '3.19.0'
+    testImplementation group: 'org.assertj', name: 'assertj-core', version: '3.23.1'
     testImplementation group: 'com.jayway.awaitility', name: 'awaitility', version: '1.7.0'
-    testImplementation('org.junit.jupiter:junit-jupiter-api:5.7.1')
-    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.7.1"
-    testImplementation group: 'org.springframework', name: 'spring-test', version: '5.3.4'
-    testImplementation group: 'org.springframework', name: 'spring-context', version: '5.3.4'
+    testImplementation('org.junit.jupiter:junit-jupiter-api:5.9.0')
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.0'
+    testImplementation group: 'org.springframework', name: 'spring-test', version: '5.3.23'
+    testImplementation group: 'org.springframework', name: 'spring-context', version: '5.3.23'
 }

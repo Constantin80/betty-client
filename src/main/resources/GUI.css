@@ -122,11 +122,12 @@
 }
 
 .button{
--fx-border-width: 0;
+-fx-border-width: 2;
 -fx-background-color: green;
--fx-border-color: red;
+-fx-border-color: green;
 -fx-font-size: 10;
 -fx-text-fill: yellow;
+-fx-border-radius: 3 3 3 3; /* top-left, top-right, bottom-right, and bottom-left corners */
 }
 
 .button:focused{
@@ -139,11 +140,12 @@
 }
 
 .button:pressed{
--fx-border-width: 0;
+-fx-border-width: 2;
 -fx-background-color: red;
 -fx-border-color: red;
 -fx-font-size: 10;
 -fx-text-fill: yellow;
+-fx-border-radius: 3 3 3 3; /* top-left, top-right, bottom-right, and bottom-left corners */
 }
 
 .label{

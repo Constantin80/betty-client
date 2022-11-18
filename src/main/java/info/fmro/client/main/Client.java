@@ -147,4 +147,8 @@ final class Client {
             Generic.closeObjects(outPrintStream, outFileOutputStream, errPrintStream, errFileOutputStream);
         }
     }
+
+    public static void clearCachedObjects() {
+
+    }
 }
