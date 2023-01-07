@@ -165,7 +165,7 @@ public class GUI
     private static final Label marketIsEnabledLabel = new Label("Mark enab:");
     @SuppressWarnings("SpellCheckingInspection")
     private static final Label marketMandatoryPlaceLabel = new Label("Mand plac:");
-    private static final Label marketKeepAtInPlayLabel = new Label("Kp inPlay:");
+//    private static final Label marketKeepAtInPlayLabel = new Label("Kp inPlay:");
     private static final AtomicLong liveTime = new AtomicLong();
     private static final Label marketLiveCounterLabel = new Label();
     private static final EventHandler<ActionEvent> liveCounterEventHandler = event -> {
@@ -202,7 +202,7 @@ public class GUI
     static {
         marketIsEnabledLabel.setContentDisplay(ContentDisplay.RIGHT);
         marketMandatoryPlaceLabel.setContentDisplay(ContentDisplay.RIGHT);
-        marketKeepAtInPlayLabel.setContentDisplay(ContentDisplay.RIGHT);
+//        marketKeepAtInPlayLabel.setContentDisplay(ContentDisplay.RIGHT);
 
         totalFundsLabel.setId("ImportantText");
         totalFundsLabel.setMinWidth(200);
@@ -2181,7 +2181,7 @@ public class GUI
                 @NotNull final CheckBox isEnabledCheckBox = GUIUtils.standardCheckBoxFactory(mainStage, marketIsEnabledLabel, eventName, marketId, marketName, isEnabled, RulesManagerModificationCommand.setMarketEnabled, "");
                 isEnabledCheckBox.setStyle("box-color: red;"); // color for unselected checkBox
                 GUIUtils.standardCheckBoxFactory(mainStage, marketMandatoryPlaceLabel, eventName, marketId, marketName, mandatoryPlace, RulesManagerModificationCommand.setMarketMandatoryPlace, "mandatoryPlace");
-                GUIUtils.standardCheckBoxFactory(mainStage, marketKeepAtInPlayLabel, eventName, marketId, marketName, keepAtInPlay, RulesManagerModificationCommand.setMarketKeepAtInPlay, "keepAtInPlay");
+//                GUIUtils.standardCheckBoxFactory(mainStage, marketKeepAtInPlayLabel, eventName, marketId, marketName, keepAtInPlay, RulesManagerModificationCommand.setMarketKeepAtInPlay, "keepAtInPlay");
 
                 GUIUtils.setOnKeyPressedTextField(marketId, simpleAmountLimitNode, simpleAmountLimit, RulesManagerModificationCommand.setMarketAmountLimit, marketId);
                 GUIUtils.handleDoubleTextField(simpleAmountLimitNode, simpleAmountLimit);
@@ -2216,7 +2216,7 @@ public class GUI
                 mainGridPane.add(nManagedRunnersPreLabel, 0, rowIndex);
                 mainGridPane.add(nManagedRunnersLabel, 1, rowIndex++);
                 mainGridPane.add(marketMandatoryPlaceLabel, 0, rowIndex++);
-                mainGridPane.add(marketKeepAtInPlayLabel, 0, rowIndex++);
+//                mainGridPane.add(marketKeepAtInPlayLabel, 0, rowIndex++);
                 mainGridPane.add(marketIsEnabledLabel, 0, rowIndex++);
 
                 int runnerIndex = 0;
